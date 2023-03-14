@@ -1,0 +1,14 @@
+target
+*/target
+target/*
+*/target/*
+
+Cargo.lock
+*.rustc_info.json
+.DS_STORE
+
+*/out
+*/debug
+*/src/debug
+
+Pulpcalc.env.toml

@@ -1,0 +1,13 @@
+simulation_type = "enneagram"
+simulation_size = 150
+distribution = [
+    0.20,
+    0.20,
+    0.20,
+    0.20,
+    0.20 
+]
+simulation_duration = 300
+topic = "Does everyone need a therapist?"
+category = "Healthcare"
+depth = 4
