@@ -2,7 +2,9 @@ mod cli;
 
 use clap::Parser;
 use config::{new_simulation_from_file, Config};
+use futures::future::join_all;
 use pulpcalc_common::simulation::SimulationType;
+use tokio::task;
 
 #[tokio::main]
 async fn main() {
@@ -10,12 +12,15 @@ async fn main() {
 
     match args.commands {
         Some(cli::PulpCommand::Sim(cmd)) => match cmd {
+            // Simulate a debate with a random user distribution
             cli::SimCmd::Generate(args) => {
                 println!(
                     "Generating a debate with {} users for {} seconds",
                     args.users, args.duration
                 );
             }
+
+            // Simulate a debate with a user pre-defined set of users (i.e. enneagram)
             cli::SimCmd::Sets(args) => {
                 println!(
                     "Running a debate simulation with the config file {}",
@@ -29,16 +34,27 @@ async fn main() {
                     SimulationType::from(args.simulation_type.as_str()),
                 );
 
+                let mut ts: Vec<task::JoinHandle<()>> = Vec::new();
+
                 for sim in simulations {
-                    sim.run_simulation();
+                    let t = task::spawn(async move {
+                        sim.run_simulation();
+                    });
+
+                    ts.push(t);
                 }
+
+                join_all(ts).await;
             }
         },
+
         Some(cli::PulpCommand::Serve(cmd)) => match cmd {
+            // Start the gRPC server
             cli::ServeCmd::Grpc(args) => {
                 println!("Starting the gRPC server {}", args.port);
             }
 
+            // Start the REST api
             cli::ServeCmd::Rest(args) => {
                 println!("Starting the REST server {}", args.port)
             }

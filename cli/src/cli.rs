@@ -52,6 +52,7 @@ pub struct SetsArgs {
     pub file: String,
 
     /// The type of simulation to run (enneagram, age, etc)
+    #[arg(short, long)]
     pub simulation_type: String,
 }
 
