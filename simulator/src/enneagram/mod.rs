@@ -1,6 +1,6 @@
 use pulpcalc_common::{
     config::Config,
-    models::{Response, User},
+    models::{Debate, Response, User},
 };
 use pulpcalc_external::chatgpt::ChatRequestBuilder;
 use rand::prelude::*;
@@ -65,10 +65,10 @@ impl EnneagramSimulation {
         String::from("Enneagram")
     }
 
-    pub async fn run_simulation(&self, config: Config) -> u64 {
-        let mut users: Vec<User> = Vec::new();
+    pub async fn run_simulation(&self, config: Config, debate: Debate) -> u64 {
+        debate.create(config.neo4j_graph.clone()).await;
 
-        println!("config {}", config.neo_endpoint.unwrap());
+        let mut users: Vec<User> = Vec::new();
 
         // generate random users based on the distribution, generate tendencies for each type
         // pick a random user and generate random content w references
@@ -79,6 +79,11 @@ impl EnneagramSimulation {
             while i < d * self.simulation_size as f64 {
                 let user: User = User::default();
 
+                user.create(config.neo4j_graph.clone()).await;
+                debate
+                    .add_participant(config.neo4j_graph.clone(), user.clone())
+                    .await;
+
                 users.push(user);
 
                 i += 1.0;
@@ -87,8 +92,6 @@ impl EnneagramSimulation {
 
         let rint = (random::<f32>() * users.len() as f32).floor() as usize;
         let rand_user = &users[rint];
-
-        rand_user.create(config.neo4j_graph.clone()).await;
 
         let content = ChatRequestBuilder::new()
             .messages("Who was the oldest man to ever live?".to_string())

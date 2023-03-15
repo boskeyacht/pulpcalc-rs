@@ -2,10 +2,7 @@ mod cli;
 
 use clap::Parser;
 use futures::future::join_all;
-use pulpcalc_common::{config::Config, simulation::SimulationType};
-use pulpcalc_external::chatgpt::ChatRequestBuilder;
-use reqwest::Client;
-use serde_json::{json, Value};
+use pulpcalc_common::{config::Config, models::Debate};
 use simulator::new_enneagram_from_file;
 use tokio::task;
 
@@ -35,8 +32,12 @@ async fn main() {
                 let mut ts = vec![];
 
                 for sim in simulations {
+                    let mut d = Debate::default();
+                    d.topic = sim.topic.clone();
+                    d.category = sim.category.clone();
+
                     let t = task::spawn(async move {
-                        sim.run_simulation(Config::init().await).await;
+                        sim.run_simulation(Config::init().await, d).await;
                     });
 
                     ts.push(t);

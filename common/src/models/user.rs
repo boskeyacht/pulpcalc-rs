@@ -25,9 +25,10 @@ impl User {
     }
 
     pub async fn create(&self, graph: Arc<Graph>) {
-        let q = Query::new("CREATE (u:User {id: $id, debates: $debates, votes: $votes, simulation_data: $simulation_data})".to_string())
-            .param("id", Uuid::new_v4().to_string())
-            .param("simulation_data", self.simulation_data.to_string());
+        let q =
+            Query::new("CREATE (u:User {id: $id,  simulation_data: $simulation_data})".to_string())
+                .param("id", Uuid::new_v4().to_string())
+                .param("simulation_data", self.simulation_data.to_string());
 
         let tx = graph.start_txn().await.unwrap();
 

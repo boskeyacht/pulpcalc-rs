@@ -2,27 +2,27 @@ use anyhow::Result;
 use pulpcalc_common::models::response::Response;
 
 pub struct Debate {
-    id: String,
+    pub id: String,
 
-    last_score: i64,
+    pub last_score: i64,
 
-    score: i64,
+    pub score: i64,
 
-    topic: String,
+    pub topic: String,
 
-    category: String,
+    pub category: String,
 
-    registered_speakers: i64,
+    pub registered_speakers: i64,
 
-    commenters: i64,
+    pub commenters: i64,
 
-    voters: i64,
+    pub voters: i64,
 
-    comments: i64,
+    pub comments: i64,
 
-    inactive_participants: i64,
+    pub inactive_participants: i64,
 
-    responses: Vec<Response>,
+    pub responses: Vec<Response>,
 }
 
 impl Debate {
