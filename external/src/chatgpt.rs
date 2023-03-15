@@ -84,8 +84,6 @@ impl ChatRequest {
     pub async fn send(&self, open_ai_key: String, client: Client) -> ChatResponse {
         let url = "https://api.openai.com/v1/chat/completions";
 
-        println!("REQ Builder: {:#?}", self);
-
         let res = client
             .post(url)
             .json(self)
@@ -96,8 +94,6 @@ impl ChatRequest {
             .json::<ChatResponse>()
             .await
             .unwrap();
-
-        println!("REQ Builder: {:#?}", res);
 
         res
     }

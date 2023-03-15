@@ -1,5 +1,5 @@
 use neo4rs::Graph;
-use std::env;
+use std::{env, sync::Arc};
 
 pub struct Config {
     /// Reddit app Id
@@ -34,12 +34,14 @@ pub struct Config {
 
     pub open_ai_key: Option<String>,
 
-    pub neo4j_graph: Option<Graph>,
+    pub neo4j_graph: Arc<Graph>,
 }
 
-impl Default for Config {
-    fn default() -> Self {
-        Config {
+impl Config {
+    pub async fn default() -> Self {
+        let g = Graph::new("", "", "").await.unwrap();
+
+        Self {
             reddit_app_id: None,
             reddit_secret_key: None,
             twitter_access_key: None,
@@ -51,14 +53,12 @@ impl Default for Config {
             neo_user: None,
             neo_password: None,
             open_ai_key: None,
-            neo4j_graph: None,
+            neo4j_graph: Arc::new(g),
         }
     }
-}
 
-impl Config {
     pub async fn init() -> Self {
-        let mut config = Config::default();
+        let mut config = Config::default().await;
 
         config.reddit_app_id = env::var("REDDIT_APP_ID").ok();
         config.reddit_secret_key = env::var("REDDIT_SECRET_KEY").ok();
@@ -72,15 +72,22 @@ impl Config {
         config.neo_password = env::var("NEO_PASSWORD").ok();
         config.open_ai_key = env::var("OPENAI_KEY").ok();
 
-        config.neo4j_graph = Some(
-            Graph::new(
-                &config.neo_endpoint.clone().unwrap(),
-                &config.neo_user.clone().unwrap(),
-                &config.neo_password.clone().unwrap(),
-            )
-            .await
-            .unwrap(),
-        );
+        let g = Graph::new(
+            &config.neo_endpoint.clone().unwrap(),
+            &config.neo_user.clone().unwrap(),
+            &config.neo_password.clone().unwrap(),
+        )
+        .await;
+
+        match g {
+            Ok(g) => {
+                config.neo4j_graph = Arc::new(g);
+            }
+
+            Err(e) => {
+                println!("Error: {:#?}", e);
+            }
+        };
 
         config
     }

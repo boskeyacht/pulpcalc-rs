@@ -1,3 +1,6 @@
+use std::sync::Arc;
+
+use super::reference::Reference;
 use super::user::User;
 use neo4rs::{Graph, Query};
 use uuid::Uuid;
@@ -50,7 +53,7 @@ impl Response {
 
     pub fn generate_engagement(&self, response: &Self) {}
 
-    pub async fn create(&self, graph: Graph) {
+    pub async fn create(&self, graph: Arc<Graph>) {
         let q = Query::new("CREATE (r:Response {id: $id, content: $content})".to_string())
             .param("id", Uuid::new_v4().to_string())
             .param("content", self.content.to_string());
@@ -71,12 +74,12 @@ impl Response {
 
         let tx = graph.start_txn().await.unwrap();
 
-        if let Err(e_) = tx.run(q).await {
-            println!("Error: {:#?}", e_);
+        if let Err(e) = tx.run(q).await {
+            println!("Error: {:#?}", e);
         }
 
-        if let Err(e_) = tx.commit().await {
-            println!("Error: {:#?}", e_);
+        if let Err(e) = tx.commit().await {
+            println!("Error: {:#?}", e);
         }
     }
 
@@ -117,10 +120,26 @@ impl Response {
         }
     }
 
-    pub async fn add_user_responded<T>(&self, graph: Graph, user: User<T>) {
+    pub async fn add_user_responded(&self, graph: Arc<Graph>, user: User) {
         let q = Query::new("MATCH (r:Response {id: $id}) MATCH (u:User {id: $user_id}) CREATE (u)-[:RESPONDED]->(r)".to_string())
             .param("id", self.id.clone())
             .param("user_id", user.id.clone());
+
+        let tx = graph.start_txn().await.unwrap();
+
+        if let Err(e) = tx.run(q).await {
+            println!("Error: {:#?}", e);
+        }
+
+        if let Err(e) = tx.commit().await {
+            println!("Error: {:#?}", e);
+        }
+    }
+
+    pub async fn add_has_referecne(&self, graph: Graph, reference: Reference) {
+        let q = Query::new("MATCH (r:Response {id: $id}) MATCH (ref:Reference {id: $reference_id}) CREATE (r)-[:HAS_REFERENCE]->(ref)".to_string())
+            .param("id", self.id.clone())
+            .param("reference_id", reference.id.clone());
 
         let tx = graph.start_txn().await.unwrap();
 

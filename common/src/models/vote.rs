@@ -13,6 +13,9 @@ impl Default for VoteType {
 
 #[derive(Debug, Clone, Default)]
 pub struct Vote {
+    /// The id of the vote
+    pub id: String,
+
     /// The type of vote
     pub vote_type: VoteType,
 
@@ -24,8 +27,9 @@ pub struct Vote {
 }
 
 impl Vote {
-    pub fn new(vote_type: VoteType, debate_id: String, response_id: String) -> Self {
+    pub fn new(id: String, vote_type: VoteType, debate_id: String, response_id: String) -> Self {
         Self {
+            id,
             vote_type,
             debate_id,
             response_id,

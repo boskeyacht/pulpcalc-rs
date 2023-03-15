@@ -4,15 +4,8 @@ use pulpcalc_common::{
 };
 use pulpcalc_external::chatgpt::ChatRequestBuilder;
 use rand::prelude::*;
-use rand::rngs::OsRng;
 use reqwest::Client;
 use serde::Deserialize;
-use std::{
-    sync::mpsc::channel,
-    thread,
-    time::{Duration, Instant},
-};
-use tokio::sync::oneshot;
 
 mod enneagram_prompts;
 
@@ -73,7 +66,7 @@ impl EnneagramSimulation {
     }
 
     pub async fn run_simulation(&self, config: Config) -> u64 {
-        let mut users: Vec<User<EnneagramData>> = Vec::new();
+        let mut users: Vec<User> = Vec::new();
 
         println!("config {}", config.neo_endpoint.unwrap());
 
@@ -84,7 +77,7 @@ impl EnneagramSimulation {
             let mut i: f64 = 0.0;
 
             while i < d * self.simulation_size as f64 {
-                let user: User<EnneagramData> = User::default();
+                let user: User = User::default();
 
                 users.push(user);
 
@@ -92,7 +85,10 @@ impl EnneagramSimulation {
             }
         }
 
-        let rint = (rand::random::<f32>() * users.len() as f32).floor() as usize;
+        let rint = (random::<f32>() * users.len() as f32).floor() as usize;
+        let rand_user = &users[rint];
+
+        rand_user.create(config.neo4j_graph.clone()).await;
 
         let content = ChatRequestBuilder::new()
             .messages("Who was the oldest man to ever live?".to_string())
@@ -108,7 +104,10 @@ impl EnneagramSimulation {
         let mut debate_response = Response::default();
         debate_response.content = content.choices[0].message.content.clone();
 
-        debate_response.create(config.neo4j_graph.unwrap()).await;
+        debate_response.create(config.neo4j_graph.clone()).await;
+        debate_response
+            .add_user_responded(config.neo4j_graph, rand_user.to_owned())
+            .await;
 
         println!("Response: {:?}", debate_response);
 
