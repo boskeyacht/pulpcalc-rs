@@ -2,9 +2,9 @@ use clap::{Args, Parser, Subcommand};
 
 #[derive(Parser, Debug, Clone)]
 #[command(
-    name("cli"),
-    about("A CLI utility for sending and reading emails"),
-    long_about("A CLI utility for sending emails over SMTP and reading emails over IMAP."),
+    name("pulpcalc"),
+    about("A CLI utility for simulating debates"),
+    long_about("A CLI utility for simulating debates."),
     version("0.1.0")
 )]
 pub struct Cli {
@@ -30,8 +30,11 @@ pub enum SimCmd {
     Generate(GenerateArgs),
 
     /// Simulate a debate with various user sets
-    #[command(name = "sets")]
-    Sets(SetsArgs),
+    #[command(name = "enneagram")]
+    Enneagram(SetsArgs),
+
+    #[command(name = "business")]
+    Business(SetsArgs),
 }
 
 #[derive(Args, Debug, Clone)]
@@ -50,10 +53,6 @@ pub struct SetsArgs {
     /// The config file to use for the simulation
     #[arg(short, long)]
     pub file: String,
-
-    /// The type of simulation to run (enneagram, age, etc)
-    #[arg(short, long)]
-    pub simulation_type: String,
 }
 
 #[derive(Subcommand, Debug, Clone)]

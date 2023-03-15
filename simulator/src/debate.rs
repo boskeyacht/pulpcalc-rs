@@ -1,6 +1,7 @@
 use anyhow::Result;
+use pulpcalc_common::models::response::Response;
 
-struct Debate {
+pub struct Debate {
     id: String,
 
     last_score: i64,
@@ -20,10 +21,12 @@ struct Debate {
     comments: i64,
 
     inactive_participants: i64,
+
+    responses: Vec<Response>,
 }
 
 impl Debate {
-    fn calculate(&self, response: i64) -> Result<i64> {
+    pub fn calculate(&self, response: &Response) -> Result<i64> {
         todo!();
     }
 }

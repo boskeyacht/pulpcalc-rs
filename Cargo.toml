@@ -4,5 +4,5 @@ members = [
     "simulator",
     "common",
     "cli",
-    "config",
+    "external"
 ]

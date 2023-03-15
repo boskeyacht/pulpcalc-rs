@@ -7,7 +7,7 @@ distribution = [
     0.20,
     0.20 
 ]
-simulation_duration = 300
+simulation_duration = 7
 topic = "Does everyone need a therapist?"
 category = "Healthcare"
 depth = 4

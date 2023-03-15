@@ -7,5 +7,10 @@ edition = "2021"
 
 [dependencies]
 pulpcalc_common = { path = "./../common" }
+pulpcalc_external = { path = "./../external" }
 anyhow = "1.0"
 serde = {version="1.0.155", features=["derive"]}
+rand = "0.8.5"
+toml = "0.7.3"
+reqwest = "0.11.14"
+tokio = { version = "1.26.0", features = ["full"] }

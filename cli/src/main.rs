@@ -1,14 +1,43 @@
 mod cli;
 
 use clap::Parser;
-use config::{new_simulation_from_file, Config};
 use futures::future::join_all;
-use pulpcalc_common::simulation::SimulationType;
+use pulpcalc_common::{config::Config, simulation::SimulationType};
+use pulpcalc_external::chatgpt::ChatRequestBuilder;
+use reqwest::Client;
+use serde_json::{json, Value};
+use simulator::new_enneagram_from_file;
 use tokio::task;
 
 #[tokio::main]
 async fn main() {
     let args = cli::Cli::parse();
+
+    // let config = Config::init();
+
+    // let cl = ChatRequestBuilder::new()
+    //     .messages("Who was the oldest man to ever live?".to_string())
+    //     .temperature(0.7)
+    //     .max_tokens(100)
+    //     .top_p(1.0)
+    //     .presence_penalty(0.0)
+    //     .frequency_penalty(0.0)
+    //     .build();
+
+    // println!("{:#?}", json!(cl));
+
+    // let res = Client::new()
+    //     .post("https://api.openai.com/v1/chat/completions")
+    //     .json(&cl)
+    //     .bearer_auth(config.open_ai_key.as_ref().unwrap().as_str())
+    //     .send()
+    //     .await
+    //     .map_err(|e| e.to_string());
+
+    // println!(
+    //     "REQ Builder: {:#?}",
+    //     res.unwrap().json::<Value>().await.unwrap()
+    // );
 
     match args.commands {
         Some(cli::PulpCommand::Sim(cmd)) => match cmd {
@@ -21,30 +50,34 @@ async fn main() {
             }
 
             // Simulate a debate with a user pre-defined set of users (i.e. enneagram)
-            cli::SimCmd::Sets(args) => {
+            cli::SimCmd::Enneagram(args) => {
                 println!(
                     "Running a debate simulation with the config file {}",
                     args.file
                 );
 
-                let _config = Config::init();
+                let simulations = new_enneagram_from_file(&args.file);
 
-                let simulations = new_simulation_from_file(
-                    &args.file,
-                    SimulationType::from(args.simulation_type.as_str()),
-                );
-
-                let mut ts: Vec<task::JoinHandle<()>> = Vec::new();
+                let mut ts = vec![];
 
                 for sim in simulations {
                     let t = task::spawn(async move {
-                        sim.run_simulation();
+                        sim.run_simulation(Config::init()).await;
                     });
 
                     ts.push(t);
                 }
 
-                join_all(ts).await;
+                let scores = join_all(ts).await;
+
+                println!("{:?}", scores);
+            }
+
+            cli::SimCmd::Business(args) => {
+                println!(
+                    "Running a business simulation with the config file {}",
+                    args.file
+                );
             }
         },
 

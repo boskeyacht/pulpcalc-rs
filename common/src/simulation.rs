@@ -1,6 +1,7 @@
 pub enum SimulationType {
     Enneagram,
     Age,
+    Business,
 }
 
 impl From<&str> for SimulationType {
@@ -8,19 +9,8 @@ impl From<&str> for SimulationType {
         match s {
             "enneagram" => SimulationType::Enneagram,
             "age" => SimulationType::Age,
+            "business" => SimulationType::Business,
             _ => panic!("Invalid simulation type"),
         }
     }
-}
-
-pub trait Simulation {
-    fn simulation_type(&self) -> String;
-
-    // fn duration(&self) -> u64;
-
-    // fn size(&self) -> u64;
-
-    // fn depth(&self) -> u64;
-
-    fn run_simulation(&self) -> u64;
 }

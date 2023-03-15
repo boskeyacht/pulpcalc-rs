@@ -1,9 +1,5 @@
-use pulpcalc_common::simulation::{Simulation, SimulationType};
-use simulator::enneagram::EnneagramSimulation;
-use std::{env, fs};
-use toml;
-
-#[derive(Debug, Default)]
+use std::env;
+#[derive(Debug, Default, Clone)]
 pub struct Config {
     /// Reddit app Id
     pub reddit_app_id: Option<String>,
@@ -52,50 +48,8 @@ impl Config {
         config.neo_endpoint = env::var("NEO_ENDPOINT").ok();
         config.neo_user = env::var("NEO_USER").ok();
         config.neo_password = env::var("NEO_PASSWORD").ok();
-        config.open_ai_key = env::var("OPEN_AI_KEY").ok();
+        config.open_ai_key = env::var("OPENAI_KEY").ok();
 
         config
     }
-}
-
-pub fn new_simulation_from_file(file: &str, sim_type: SimulationType) -> Vec<Box<dyn Simulation>> {
-    let contents = match fs::read_to_string(file) {
-        Ok(c) => c,
-
-        Err(e) => {
-            println!("{}", e);
-
-            std::process::exit(1);
-        }
-    };
-
-    let mut sims: Vec<Box<dyn Simulation>> = vec![];
-
-    match sim_type {
-        SimulationType::Enneagram => {
-            let data: EnneagramSimulation = match toml::from_str(&contents) {
-                Ok(d) => d,
-
-                Err(e) => {
-                    println!("{}", e);
-
-                    std::process::exit(1);
-                }
-            };
-
-            sims.push(Box::new(EnneagramSimulation {
-                simulation_type: String::from("Enneagram"),
-                simulation_size: data.simulation_size,
-                distribution: data.distribution,
-                depth: data.depth,
-                simulation_duration: data.simulation_duration,
-                topic: data.topic,
-                category: data.category,
-            }) as Box<dyn Simulation>);
-        }
-
-        SimulationType::Age => println!("Age unimplemented"),
-    };
-
-    sims
 }

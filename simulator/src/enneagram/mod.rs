@@ -1,5 +1,20 @@
-use pulpcalc_common::simulation::Simulation;
+use pulpcalc_common::{config::Config, models::User};
+use pulpcalc_external::chatgpt::ChatRequestBuilder;
+use rand::prelude::*;
+use rand::rngs::OsRng;
+use reqwest::Client;
 use serde::Deserialize;
+use std::{
+    sync::mpsc::channel,
+    thread,
+    time::{Duration, Instant},
+};
+use tokio::sync::oneshot;
+
+#[derive(Debug, Default)]
+pub struct EnneagramData {
+    pub enneagram_type: i64,
+}
 
 #[derive(Debug, Default, Deserialize)]
 pub struct EnneagramSimulation {
@@ -7,16 +22,16 @@ pub struct EnneagramSimulation {
     pub simulation_type: String,
 
     /// The amount of users in the simulation
-    pub simulation_size: i64,
+    pub simulation_size: u64,
 
     pub distribution: Vec<f64>,
 
     /// The depth of the simulation. The higher the number,
     /// the more replies will be created for any response
-    pub depth: i64,
+    pub depth: u64,
 
     /// The duration of the simulation
-    pub simulation_duration: i64,
+    pub simulation_duration: u64,
 
     /// The topic of the debate
     pub topic: String,
@@ -25,39 +40,25 @@ pub struct EnneagramSimulation {
     pub category: String,
 }
 
-impl Simulation for EnneagramSimulation {
-    fn simulation_type(&self) -> String {
-        String::from("Enneagram")
-    }
-
-    fn run_simulation(&self) -> u64 {
-        // Create channels for sending and receieving
-        // let (one_tx, one_rx) = channel();
-
-        // // Spawn one second timer
-        // thread::spawn(move || loop {
-        //     thread::sleep(Duration::from_secs(1));
-        //     one_tx.send("tick").unwrap();
-        // });
-
-        // loop {
-        //     thread::sleep(Duration::from_millis(50));
-        //     let _ = one_rx.try_recv().map(|res| println!("{}", res));
-        // }
-
-        todo!();
-    }
-}
-
 #[allow(dead_code)]
 impl EnneagramSimulation {
-    fn new(size: i64, depth: i64, duration: i64, topic: &str, cat: &str, dist: Vec<f64>) -> Self {
+    fn new(
+        size: u64,
+        depth: u64,
+        duration: u64,
+        topic: String,
+        cat: String,
+        dist: Vec<f64>,
+    ) -> Self {
         let mut simulation = EnneagramSimulation::default();
 
         simulation.simulation_type = String::from("Enneagram");
         simulation.simulation_size = size;
         simulation.depth = depth;
         simulation.simulation_duration = duration;
+        simulation.topic = topic;
+        simulation.category = cat;
+        simulation.distribution = dist;
 
         simulation
     }
@@ -85,19 +86,62 @@ impl EnneagramSimulation {
     fn distribution(&self) -> Vec<f64> {
         todo!()
     }
+
+    pub fn simulation_type(&self) -> String {
+        String::from("Enneagram")
+    }
+
+    pub async fn run_simulation(&self, config: Config) -> u64 {
+        let mut users: Vec<User<EnneagramData>> = Vec::new();
+
+        println!("{:?}", config);
+        // generate random users based on the distribution, generate tendencies for each type
+        // pick a random user and generate random content w references
+        // generate responses to that content
+        for d in self.distribution.iter() {
+            let mut i: f64 = 0.0;
+
+            while i < d * self.simulation_size as f64 {
+                let user: User<EnneagramData> = User::default();
+
+                println!("{:?}", user);
+
+                users.push(user);
+
+                i += 1.0;
+            }
+        }
+
+        let rint = (rand::random::<f32>() * users.len() as f32).floor() as usize;
+
+        let res = ChatRequestBuilder::new()
+            .messages("Who was the oldest man to ever live?".to_string())
+            .temperature(0.7)
+            .max_tokens(100)
+            .top_p(1.0)
+            .presence_penalty(0.0)
+            .frequency_penalty(0.0)
+            .build()
+            .send(config.open_ai_key.unwrap(), Client::new())
+            .await;
+
+        println!("{:?}", res);
+
+        0
+    }
 }
 
-struct EnneagramSimulationBuilder {
-    size: i64,
-    depth: i64,
-    duration: i64,
-    topic: String,
-    category: String,
-    distribution: Vec<f64>,
+pub struct EnneagramSimulationBuilder {
+    pub size: u64,
+    pub depth: u64,
+    pub duration: u64,
+    pub topic: String,
+    pub category: String,
+    pub distribution: Vec<f64>,
 }
 
 impl EnneagramSimulationBuilder {
-    fn new() -> Self {
+    pub fn new() -> Self {
         EnneagramSimulationBuilder {
             size: 0,
             depth: 0,
@@ -108,43 +152,43 @@ impl EnneagramSimulationBuilder {
         }
     }
 
-    fn size(mut self, size: i64) -> Self {
+    pub fn size(mut self, size: u64) -> Self {
         self.size = size;
         self
     }
 
-    fn depth(mut self, depth: i64) -> Self {
+    pub fn depth(mut self, depth: u64) -> Self {
         self.depth = depth;
         self
     }
 
-    fn duration(mut self, duration: i64) -> Self {
+    pub fn duration(mut self, duration: u64) -> Self {
         self.duration = duration;
         self
     }
 
-    fn topic(mut self, topic: String) -> Self {
+    pub fn topic(mut self, topic: String) -> Self {
         self.topic = topic;
         self
     }
 
-    fn category(mut self, category: String) -> Self {
+    pub fn category(mut self, category: String) -> Self {
         self.category = category;
         self
     }
 
-    fn distribution(mut self, distribution: Vec<f64>) -> Self {
+    pub fn distribution(mut self, distribution: Vec<f64>) -> Self {
         self.distribution = distribution;
         self
     }
 
-    fn build(self) -> EnneagramSimulation {
+    pub fn build(self) -> EnneagramSimulation {
         EnneagramSimulation::new(
             self.size,
             self.depth,
             self.duration,
-            self.topic.as_str(),
-            self.category.as_str(),
+            self.topic,
+            self.category,
             self.distribution,
         )
     }
