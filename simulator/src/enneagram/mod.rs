@@ -1,4 +1,7 @@
-use pulpcalc_common::{config::Config, models::User};
+use pulpcalc_common::{
+    config::Config,
+    models::{Response, User},
+};
 use pulpcalc_external::chatgpt::ChatRequestBuilder;
 use rand::prelude::*;
 use rand::rngs::OsRng;
@@ -10,6 +13,8 @@ use std::{
     time::{Duration, Instant},
 };
 use tokio::sync::oneshot;
+
+mod enneagram_prompts;
 
 #[derive(Debug, Default)]
 pub struct EnneagramData {
@@ -63,30 +68,6 @@ impl EnneagramSimulation {
         simulation
     }
 
-    fn duration(&self) -> u64 {
-        todo!()
-    }
-
-    fn size(&self) -> u64 {
-        todo!()
-    }
-
-    fn depth(&self) -> u64 {
-        todo!()
-    }
-
-    fn topic(&self) -> String {
-        todo!()
-    }
-
-    fn category(&self) -> String {
-        todo!()
-    }
-
-    fn distribution(&self) -> Vec<f64> {
-        todo!()
-    }
-
     pub fn simulation_type(&self) -> String {
         String::from("Enneagram")
     }
@@ -94,7 +75,8 @@ impl EnneagramSimulation {
     pub async fn run_simulation(&self, config: Config) -> u64 {
         let mut users: Vec<User<EnneagramData>> = Vec::new();
 
-        println!("{:?}", config);
+        println!("config {}", config.neo_endpoint.unwrap());
+
         // generate random users based on the distribution, generate tendencies for each type
         // pick a random user and generate random content w references
         // generate responses to that content
@@ -104,8 +86,6 @@ impl EnneagramSimulation {
             while i < d * self.simulation_size as f64 {
                 let user: User<EnneagramData> = User::default();
 
-                println!("{:?}", user);
-
                 users.push(user);
 
                 i += 1.0;
@@ -114,7 +94,7 @@ impl EnneagramSimulation {
 
         let rint = (rand::random::<f32>() * users.len() as f32).floor() as usize;
 
-        let res = ChatRequestBuilder::new()
+        let content = ChatRequestBuilder::new()
             .messages("Who was the oldest man to ever live?".to_string())
             .temperature(0.7)
             .max_tokens(100)
@@ -125,7 +105,12 @@ impl EnneagramSimulation {
             .send(config.open_ai_key.unwrap(), Client::new())
             .await;
 
-        println!("{:?}", res);
+        let mut debate_response = Response::default();
+        debate_response.content = content.choices[0].message.content.clone();
+
+        debate_response.create(config.neo4j_graph.unwrap()).await;
+
+        println!("Response: {:?}", debate_response);
 
         0
     }

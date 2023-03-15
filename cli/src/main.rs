@@ -13,32 +13,6 @@ use tokio::task;
 async fn main() {
     let args = cli::Cli::parse();
 
-    // let config = Config::init();
-
-    // let cl = ChatRequestBuilder::new()
-    //     .messages("Who was the oldest man to ever live?".to_string())
-    //     .temperature(0.7)
-    //     .max_tokens(100)
-    //     .top_p(1.0)
-    //     .presence_penalty(0.0)
-    //     .frequency_penalty(0.0)
-    //     .build();
-
-    // println!("{:#?}", json!(cl));
-
-    // let res = Client::new()
-    //     .post("https://api.openai.com/v1/chat/completions")
-    //     .json(&cl)
-    //     .bearer_auth(config.open_ai_key.as_ref().unwrap().as_str())
-    //     .send()
-    //     .await
-    //     .map_err(|e| e.to_string());
-
-    // println!(
-    //     "REQ Builder: {:#?}",
-    //     res.unwrap().json::<Value>().await.unwrap()
-    // );
-
     match args.commands {
         Some(cli::PulpCommand::Sim(cmd)) => match cmd {
             // Simulate a debate with a random user distribution
@@ -62,7 +36,7 @@ async fn main() {
 
                 for sim in simulations {
                     let t = task::spawn(async move {
-                        sim.run_simulation(Config::init()).await;
+                        sim.run_simulation(Config::init().await).await;
                     });
 
                     ts.push(t);

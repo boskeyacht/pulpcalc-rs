@@ -1,4 +1,8 @@
-#[derive(Debug, Default)]
+use super::user::User;
+use neo4rs::{Graph, Query};
+use uuid::Uuid;
+
+#[derive(Debug, Default, Clone)]
 pub struct Response {
     pub id: String,
 
@@ -45,4 +49,87 @@ impl Response {
     }
 
     pub fn generate_engagement(&self, response: &Self) {}
+
+    pub async fn create(&self, graph: Graph) {
+        let q = Query::new("CREATE (r:Response {id: $id, content: $content})".to_string())
+            .param("id", Uuid::new_v4().to_string())
+            .param("content", self.content.to_string());
+
+        let tx = graph.start_txn().await.unwrap();
+
+        if let Err(e) = tx.run(q).await {
+            println!("Error: {:#?}", e);
+        }
+
+        if let Err(e) = tx.commit().await {
+            println!("Error: {:#?}", e);
+        }
+    }
+
+    pub async fn get_response(&self, graph: Graph) {
+        let q = Query::new("MATCH (r:Response {id: $id})".to_string()).param("id", self.id.clone());
+
+        let tx = graph.start_txn().await.unwrap();
+
+        if let Err(e_) = tx.run(q).await {
+            println!("Error: {:#?}", e_);
+        }
+
+        if let Err(e_) = tx.commit().await {
+            println!("Error: {:#?}", e_);
+        }
+    }
+
+    pub async fn update_response(&self, graph: Graph) {
+        let q = Query::new("MATCH (r:Response {id: $id} SET r.content = $content, r.confidence = $confidence, r.score = $score, r.valid_vote_count = $vvc, r.invalid_vote_count = $ivc, r.abstain_vote_count = $avc, r.author_id = $author_id)".to_string())
+            .param("id", self.id.clone())
+            .param("content", self.content.clone())
+            .param("confidence", self.confidence.to_string())
+            .param("score", self.score)
+            .param("vvc", self.valid_vote_count)
+            .param("ivc", self.invalid_vote_count)
+            .param("avc", self.abstain_vote_count)
+            .param("author_id", self.author_id.clone());
+
+        let tx = graph.start_txn().await.unwrap();
+
+        if let Err(e) = tx.run(q).await {
+            println!("Error: {:#?}", e);
+        }
+
+        if let Err(e) = tx.commit().await {
+            println!("Error: {:#?}", e);
+        }
+    }
+
+    pub async fn delete_response(&self, graph: Graph) {
+        let q = Query::new("MATCH (r:Response {id: $id}) DETACH DELETE r".to_string())
+            .param("id", self.id.clone());
+
+        let tx = graph.start_txn().await.unwrap();
+
+        if let Err(e) = tx.run(q).await {
+            println!("Error: {:#?}", e);
+        }
+
+        if let Err(e) = tx.commit().await {
+            println!("Error: {:#?}", e);
+        }
+    }
+
+    pub async fn add_user_responded<T>(&self, graph: Graph, user: User<T>) {
+        let q = Query::new("MATCH (r:Response {id: $id}) MATCH (u:User {id: $user_id}) CREATE (u)-[:RESPONDED]->(r)".to_string())
+            .param("id", self.id.clone())
+            .param("user_id", user.id.clone());
+
+        let tx = graph.start_txn().await.unwrap();
+
+        if let Err(e) = tx.run(q).await {
+            println!("Error: {:#?}", e);
+        }
+
+        if let Err(e) = tx.commit().await {
+            println!("Error: {:#?}", e);
+        }
+    }
 }

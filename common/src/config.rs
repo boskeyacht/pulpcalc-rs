@@ -1,5 +1,6 @@
+use neo4rs::Graph;
 use std::env;
-#[derive(Debug, Default, Clone)]
+
 pub struct Config {
     /// Reddit app Id
     pub reddit_app_id: Option<String>,
@@ -32,10 +33,31 @@ pub struct Config {
     pub neo_password: Option<String>,
 
     pub open_ai_key: Option<String>,
+
+    pub neo4j_graph: Option<Graph>,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Config {
+            reddit_app_id: None,
+            reddit_secret_key: None,
+            twitter_access_key: None,
+            twitter_access_secret: None,
+            twitter_api_key: None,
+            twitter_api_secret: None,
+            twitter_bearer_token: None,
+            neo_endpoint: None,
+            neo_user: None,
+            neo_password: None,
+            open_ai_key: None,
+            neo4j_graph: None,
+        }
+    }
 }
 
 impl Config {
-    pub fn init() -> Self {
+    pub async fn init() -> Self {
         let mut config = Config::default();
 
         config.reddit_app_id = env::var("REDDIT_APP_ID").ok();
@@ -49,6 +71,16 @@ impl Config {
         config.neo_user = env::var("NEO_USER").ok();
         config.neo_password = env::var("NEO_PASSWORD").ok();
         config.open_ai_key = env::var("OPENAI_KEY").ok();
+
+        config.neo4j_graph = Some(
+            Graph::new(
+                &config.neo_endpoint.clone().unwrap(),
+                &config.neo_user.clone().unwrap(),
+                &config.neo_password.clone().unwrap(),
+            )
+            .await
+            .unwrap(),
+        );
 
         config
     }
