@@ -1,6 +1,5 @@
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 
 #[derive(Debug, Default, Deserialize)]
 pub struct ChatUsage {

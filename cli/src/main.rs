@@ -31,6 +31,8 @@ async fn main() {
 
                 let mut ts = vec![];
 
+                let debates: Vec<Debate> = Vec::new();
+
                 for sim in simulations {
                     let mut d = Debate::default();
                     d.topic = sim.topic.clone();
@@ -43,9 +45,11 @@ async fn main() {
                     ts.push(t);
                 }
 
-                let scores = join_all(ts).await;
+                join_all(ts).await;
 
-                println!("{:?}", scores);
+                for debate in debates {
+                    println!("Debate: {:?}", debate);
+                }
             }
 
             cli::SimCmd::Business(args) => {

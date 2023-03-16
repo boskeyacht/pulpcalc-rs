@@ -1,6 +1,6 @@
 use pulpcalc_common::{
     config::Config,
-    models::{Attributes, Debate, Engagements, Response, User},
+    models::{Debate, Response, User},
 };
 use pulpcalc_external::chatgpt::ChatRequestBuilder;
 use rand::prelude::*;
@@ -88,7 +88,7 @@ impl EnneagramSimulation {
         String::from("Enneagram")
     }
 
-    pub async fn run_simulation(&self, config: Config, mut debate: Debate) -> u64 {
+    pub async fn run_simulation(&self, config: Config, mut debate: Debate) {
         let debate_id = debate.create(config.neo4j_graph.clone()).await;
         debate.id = debate_id;
 
@@ -210,10 +210,6 @@ impl EnneagramSimulation {
         debate_response
             .add_user_responded(config.neo4j_graph, rand_user.base_user.to_owned())
             .await;
-
-        println!("Response: {:?}", debate_response);
-
-        0
     }
 
     async fn generate_engagement(

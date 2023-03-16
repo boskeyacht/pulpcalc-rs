@@ -1,5 +1,4 @@
 pub mod business_analytics;
-pub mod debate;
 pub mod enneagram;
 
 mod util;
