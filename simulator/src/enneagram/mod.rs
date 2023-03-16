@@ -144,72 +144,78 @@ impl EnneagramSimulation {
             }
         }
 
-        let rint = (random::<f32>() * users.len() as f32).floor() as usize;
-        let rand_user = &users[rint];
+        for _ in 1..self.simulation_size {
+            let rint = (random::<f32>() * users.len() as f32).floor() as usize;
+            let rand_user = &users[rint];
 
-        let mut cont_prompt = ENNEAGRAM_RESPONSE_CONTENT_PROMPT.to_string();
-        cont_prompt = cont_prompt.replace(
-            "VALID_VOTE_TENDENCY",
-            &rand_user.tendencies.valid_vote_tendency.to_string(),
-        );
-        cont_prompt = cont_prompt.replace(
-            "INVALID_VOTE_TENDENCY",
-            &rand_user.tendencies.invalid_vote_tendency.to_string(),
-        );
-        cont_prompt = cont_prompt.replace(
-            "ABSTAIN_VOTE_TENDENCY",
-            &rand_user.tendencies.invalid_vote_tendency.to_string(),
-        );
-        cont_prompt = cont_prompt.replace(
-            "REPORT_TENDENCY",
-            &rand_user.tendencies.invalid_vote_tendency.to_string(),
-        );
-        cont_prompt = cont_prompt.replace(
-            "HIDE_TENDENCY",
-            &rand_user.tendencies.invalid_vote_tendency.to_string(),
-        );
-        cont_prompt = cont_prompt.replace("THIS_TOPIC", &self.topic.clone());
+            let mut cont_prompt = ENNEAGRAM_RESPONSE_CONTENT_PROMPT.to_string();
+            cont_prompt = cont_prompt.replace(
+                "VALID_VOTE_TENDENCY",
+                &rand_user.tendencies.valid_vote_tendency.to_string(),
+            );
+            cont_prompt = cont_prompt.replace(
+                "INVALID_VOTE_TENDENCY",
+                &rand_user.tendencies.invalid_vote_tendency.to_string(),
+            );
+            cont_prompt = cont_prompt.replace(
+                "ABSTAIN_VOTE_TENDENCY",
+                &rand_user.tendencies.invalid_vote_tendency.to_string(),
+            );
+            cont_prompt = cont_prompt.replace(
+                "REPORT_TENDENCY",
+                &rand_user.tendencies.invalid_vote_tendency.to_string(),
+            );
+            cont_prompt = cont_prompt.replace(
+                "HIDE_TENDENCY",
+                &rand_user.tendencies.invalid_vote_tendency.to_string(),
+            );
+            cont_prompt = cont_prompt.replace("THIS_TOPIC", &self.topic.clone());
 
-        let response_chat_res = ChatRequestBuilder::new()
-            .messages(cont_prompt)
-            .temperature(0.7)
-            .max_tokens(1000)
-            .top_p(1.0)
-            .presence_penalty(0.0)
-            .frequency_penalty(0.0)
-            .build()
-            .send(key.clone(), Client::new())
-            .await;
+            let response_chat_res = ChatRequestBuilder::new()
+                .messages(cont_prompt)
+                .temperature(0.7)
+                .max_tokens(1000)
+                .top_p(1.0)
+                .presence_penalty(0.0)
+                .frequency_penalty(0.0)
+                .build()
+                .send(key.clone(), Client::new())
+                .await;
 
-        let content =
-            from_str::<ContentReponse>(&response_chat_res.choices[0].message.content.clone());
+            let content =
+                from_str::<ContentReponse>(&response_chat_res.choices[0].message.content.clone());
 
-        let cont_res = match content {
-            Ok(res) => Some(res),
+            let cont_res = match content {
+                Ok(res) => Some(res),
 
-            Err(e) => {
-                println!("failed to unmarshal content: {:?}", e);
+                Err(e) => {
+                    println!("failed to unmarshal content: {:?}", e);
 
-                None
+                    None
+                }
             }
+            .unwrap();
+
+            let mut debate_response = Response::default();
+            debate_response.content = cont_res.content;
+            debate_response.confidence = cont_res.confidence;
+
+            debate_response.score = debate_response
+                .calculate_content_attribute_score(key.clone())
+                .await
+                + debate_response.calculate_engagement_score();
+
+            let debate_response_id = debate_response.create(config.neo4j_graph.clone()).await;
+            debate_response.id = debate_response_id;
+
+            debate_response
+                .add_user_responded(config.neo4j_graph.clone(), rand_user.base_user.to_owned())
+                .await;
+
+            debate_response
+                .add_debate_response_relationship(config.neo4j_graph.clone(), debate.clone())
+                .await;
         }
-        .unwrap();
-
-        let mut debate_response = Response::default();
-        debate_response.content = cont_res.content;
-        debate_response.confidence = cont_res.confidence;
-
-        debate_response.score = debate_response
-            .calculate_content_attribute_score(key.clone())
-            .await
-            + debate_response.calculate_engagement_score();
-
-        let debate_response_id = debate_response.create(config.neo4j_graph.clone()).await;
-        debate_response.id = debate_response_id;
-
-        debate_response
-            .add_user_responded(config.neo4j_graph, rand_user.base_user.to_owned())
-            .await;
     }
 
     async fn generate_engagement(

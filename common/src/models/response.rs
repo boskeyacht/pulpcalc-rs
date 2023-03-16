@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
-use super::attributes::Attributes;
 use super::engagements::Engagements;
 use super::reference::Reference;
 use super::user::User;
+use super::{attributes::Attributes, Debate};
 use crate::models::gpt_scoring::*;
 use neo4rs::{Graph, Query};
 use pulpcalc_external::chatgpt::ChatRequestBuilder;
@@ -367,6 +367,22 @@ impl Response {
         let q = Query::new("MATCH (r:Response {id: $id}) MATCH (rep:Response {id: $reply_id}) CREATE (r)-[:REPLIED]->(rep)".to_string())
             .param("id", self.id.clone())
             .param("reply_id", reply.id.clone());
+
+        let tx = graph.start_txn().await.unwrap();
+
+        if let Err(e) = tx.run(q).await {
+            println!("Error: {:#?}", e);
+        }
+
+        if let Err(e) = tx.commit().await {
+            println!("Error: {:#?}", e);
+        }
+    }
+
+    pub async fn add_debate_response_relationship(&self, graph: Arc<Graph>, debate: Debate) {
+        let q = Query::new("MATCH (r:Response {id: $id}) MATCH (d:Debate {id: $debate_id}) CREATE (r)-[:RESPONSE]->(d)".to_string())
+            .param("id", self.id.clone())
+            .param("debate_id", debate.id.clone());
 
         let tx = graph.start_txn().await.unwrap();
 
