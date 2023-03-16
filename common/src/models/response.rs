@@ -112,7 +112,7 @@ impl Response {
         let relevance_chat_res = ChatRequestBuilder::new()
             .messages(relevance_prompt)
             .temperature(0.7)
-            .max_tokens(1000)
+            .max_tokens(850)
             .top_p(1.0)
             .presence_penalty(0.0)
             .frequency_penalty(0.0)
@@ -145,7 +145,7 @@ impl Response {
         let soundness_chat_res = ChatRequestBuilder::new()
             .messages(soundness_prompt)
             .temperature(0.7)
-            .max_tokens(1000)
+            .max_tokens(850)
             .top_p(1.0)
             .presence_penalty(0.0)
             .frequency_penalty(0.0)
@@ -177,7 +177,7 @@ impl Response {
         let mastery_chat_res = ChatRequestBuilder::new()
             .messages(mastery_prompt)
             .temperature(0.7)
-            .max_tokens(1000)
+            .max_tokens(850)
             .top_p(1.0)
             .presence_penalty(0.0)
             .frequency_penalty(0.0)
@@ -196,27 +196,28 @@ impl Response {
 
                 None
             }
+        };
+
+        if let Some(mast) = mst {
+            let mastery_vocabulary = if let Some(wrds) = mast.mastery_words.clone() {
+                wrds.len() as i64
+            } else {
+                0
+            };
+
+            word_count = self.content.split_whitespace().count() as i64;
+
+            init_score += (mastery_vocabulary + word_count) * (relevance + soundness) as i64;
+
+            self.attributes = Attributes::new(
+                relevance,
+                soundness,
+                references,
+                word_count,
+                mast.mastery_words,
+            );
+        } else {
         }
-        .unwrap();
-
-        mastery_vocabulary = mst.mastery_vocab;
-
-        let mst_vocabulary = mst.mastery_words.clone();
-
-        println!("mastery_vocabulary: {:?}", mastery_vocabulary);
-        println!("mastery_vocabulary: {:?}", mst_vocabulary);
-
-        word_count = self.content.split_whitespace().count() as i64;
-
-        init_score += (mastery_vocabulary + word_count) * (relevance + soundness) as i64;
-
-        self.attributes = Attributes::new(
-            relevance,
-            soundness,
-            references,
-            word_count,
-            mst.mastery_words,
-        );
 
         println!("init_score: {:#?}", init_score);
 

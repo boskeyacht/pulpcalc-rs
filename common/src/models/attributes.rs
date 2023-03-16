@@ -8,7 +8,7 @@ pub struct Attributes {
 
     pub word_count: i64,
 
-    pub mastery_vocab_words: Vec<String>,
+    pub mastery_vocab_words: Option<Vec<String>>,
 }
 
 impl Attributes {
@@ -17,7 +17,7 @@ impl Attributes {
         soundness: f64,
         references: i64,
         word_count: i64,
-        mastery_vocab_words: Vec<String>,
+        mastery_vocab_words: Option<Vec<String>>,
     ) -> Self {
         Self {
             relevance,
