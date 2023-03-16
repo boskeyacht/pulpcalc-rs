@@ -230,34 +230,68 @@ impl Response {
     // ----------------------------------
     //           Neo4j Methods          -
     // ----------------------------------
-    pub async fn create(&self, graph: Arc<Graph>) {
-        let q = Query::new("CREATE (r:Response {id: $id, content: $content})".to_string())
-            .param("id", Uuid::new_v4().to_string())
-            .param("content", self.content.to_string());
+    pub async fn create(&self, graph: Arc<Graph>) -> String {
+        let q = Query::new(
+            "CREATE (r:Response {id: $id, content: $content}) RETURN (r.id)".to_string(),
+        )
+        .param("id", Uuid::new_v4().to_string())
+        .param("content", self.content.to_string());
 
         let tx = graph.start_txn().await.unwrap();
 
-        if let Err(e) = tx.run(q).await {
-            println!("Error: {:#?}", e);
+        let id = match tx.execute(q).await {
+            Ok(mut res) => {
+                let row = res.next().await.unwrap().unwrap();
+
+                let id: String = row.get("(r.id)").unwrap();
+
+                Some(id)
+            }
+
+            Err(e) => {
+                println!("Error: {:#?}", e);
+
+                None
+            }
         }
+        .unwrap();
 
         if let Err(e) = tx.commit().await {
             println!("Error: {:#?}", e);
-        }
+        };
+
+        id
     }
 
-    pub async fn get_response(&self, graph: Graph) {
+    pub async fn get_response(&self, graph: Graph) -> Self {
         let q = Query::new("MATCH (r:Response {id: $id})".to_string()).param("id", self.id.clone());
 
         let tx = graph.start_txn().await.unwrap();
 
-        if let Err(e) = tx.run(q).await {
-            println!("Error: {:#?}", e);
+        let response = match tx.execute(q).await {
+            Ok(mut res) => {
+                let row = res.next().await.unwrap().unwrap();
+
+                let mut r = Response::default();
+
+                r.content = row.get("r.content").unwrap();
+
+                Some(r)
+            }
+
+            Err(e) => {
+                println!("Error: {:#?}", e);
+
+                None
+            }
         }
+        .unwrap();
 
         if let Err(e) = tx.commit().await {
             println!("Error: {:#?}", e);
-        }
+        };
+
+        response
     }
 
     pub async fn update_response(&self, graph: Graph) {
@@ -317,6 +351,22 @@ impl Response {
         let q = Query::new("MATCH (r:Response {id: $id}) MATCH (ref:Reference {id: $reference_id}) CREATE (r)-[:HAS_REFERENCE]->(ref)".to_string())
             .param("id", self.id.clone())
             .param("reference_id", reference.id.clone());
+
+        let tx = graph.start_txn().await.unwrap();
+
+        if let Err(e) = tx.run(q).await {
+            println!("Error: {:#?}", e);
+        }
+
+        if let Err(e) = tx.commit().await {
+            println!("Error: {:#?}", e);
+        }
+    }
+
+    pub async fn add_reply_relationship(&self, graph: Arc<Graph>, reply: Self) {
+        let q = Query::new("MATCH (r:Response {id: $id}) MATCH (rep:Response {id: $reply_id}) CREATE (r)-[:REPLIED]->(rep)".to_string())
+            .param("id", self.id.clone())
+            .param("reply_id", reply.id.clone());
 
         let tx = graph.start_txn().await.unwrap();
 

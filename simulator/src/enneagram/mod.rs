@@ -88,8 +88,9 @@ impl EnneagramSimulation {
         String::from("Enneagram")
     }
 
-    pub async fn run_simulation(&self, config: Config, debate: Debate) -> u64 {
-        debate.create(config.neo4j_graph.clone()).await;
+    pub async fn run_simulation(&self, config: Config, mut debate: Debate) -> u64 {
+        let debate_id = debate.create(config.neo4j_graph.clone()).await;
+        debate.id = debate_id;
 
         let mut users: Vec<EnneagramUser> = Vec::new();
         let key = config.open_ai_key.unwrap();
@@ -130,7 +131,9 @@ impl EnneagramSimulation {
                 let mut user = EnneagramUser::default();
                 user.tendencies = t_res.clone().map_user_tendencies(i as i64);
 
-                user.base_user.create(config.neo4j_graph.clone()).await;
+                let user_id = user.base_user.create(config.neo4j_graph.clone()).await;
+                user.base_user.id = user_id;
+
                 debate
                     .add_participant(config.neo4j_graph.clone(), user.base_user.clone())
                     .await;
@@ -201,7 +204,9 @@ impl EnneagramSimulation {
             .await
             + debate_response.calculate_engagement_score();
 
-        debate_response.create(config.neo4j_graph.clone()).await;
+        let debate_response_id = debate_response.create(config.neo4j_graph.clone()).await;
+        debate_response.id = debate_response_id;
+
         debate_response
             .add_user_responded(config.neo4j_graph, rand_user.base_user.to_owned())
             .await;
@@ -282,7 +287,9 @@ impl EnneagramSimulation {
 
         depth -= 1;
 
-        response_reply.create(config.neo4j_graph.clone()).await;
+        let response_reply_id = response_reply.create(config.neo4j_graph.clone()).await;
+        response_reply.id = response_reply_id;
+
         response_reply
             .add_user_responded(config.neo4j_graph.clone(), rand_user.base_user.to_owned())
             .await;
@@ -355,9 +362,11 @@ impl EnneagramSimulation {
 
             depth -= 1;
 
-            depth_response_reply
+            let depth_response_reply_id = depth_response_reply
                 .create(config.neo4j_graph.clone())
                 .await;
+            depth_response_reply.id = depth_response_reply_id;
+
             depth_response_reply
                 .add_user_responded(config.neo4j_graph.clone(), rand_user.base_user.to_owned())
                 .await;

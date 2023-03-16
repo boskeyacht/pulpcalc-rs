@@ -54,43 +54,83 @@ impl Debate {
         }
     }
 
-    pub async fn create(&self, graph: Arc<Graph>) {
-        let q = Query::new("CREATE(d: Debate {id: $id, score: $score, topic: $topic, category: $category, registered_speakers: $registered_speakers, commenters: $commenters, voters: $voters, inactive_participants: $inactive_participants, comments: $comments, responses: $responses})".to_string())
+    pub async fn create(&self, graph: Arc<Graph>) -> String {
+        let q = Query::new("CREATE(d: Debate {id: $id, score: $score, topic: $topic, category: $category, registered_speakers: $registered_speakers, commenters: $commenters, voters: $voters, inactive_participants: $inactive_participants, comments: $comments, responses: $responses}) RETURN (d.id)".to_string())
             .param("id", Uuid::new_v4().to_string())
             .param("score", self.score.to_string())
             .param("topic", self.topic.to_string())
             .param("category", self.category.to_string())
             .param("registered_speakers", self.registered_speakers.to_string())
             .param("commenters", self.commenters.to_string())
-            .param("voters", self.voters.to_string())
+            .param("voters", 1.to_string())
             .param("comments", self.comments.to_string())
             .param("inactive_participants", self.inactive_participants.to_string())
             .param("responses", self.responses.to_string());
 
         let tx = graph.start_txn().await.unwrap();
 
-        if let Err(e) = tx.run(q).await {
-            println!("Error: {:#?}", e);
+        let id = match tx.execute(q).await {
+            Ok(mut res) => {
+                let row = res.next().await.unwrap().unwrap();
+
+                let id = row.get("(d.id)");
+
+                id
+            }
+
+            Err(e) => {
+                println!("Error: {:#?}", e);
+
+                None
+            }
         }
+        .unwrap();
 
         if let Err(e) = tx.commit().await {
             println!("Error: {:#?}", e);
-        }
+        };
+
+        id
     }
 
-    pub async fn get_debate(&self, graph: Arc<Graph>) {
-        let q = Query::new("MATCH (d:Debate {id: $id})".to_string())
-            .param("id", Uuid::new_v4().to_string());
+    pub async fn get_debate(&self, graph: Arc<Graph>) -> Self {
+        let q = Query::new("MATCH (d:Debate {id: $id}) RETURN(d)".to_string())
+            .param("id", self.id.clone());
 
         let tx = graph.start_txn().await.unwrap();
 
-        if let Err(e) = tx.run(q).await {
-            println!("Error: {:#?}", e);
+        let debate = match tx.execute(q).await {
+            Ok(mut res) => {
+                let row = res.next().await.unwrap().unwrap();
+
+                let mut d = Debate::default();
+
+                d.voters = row.get("(voters)").unwrap_or_default();
+                d.responses = row.get("responses").unwrap_or_default();
+                d.comments = row.get("comments").unwrap_or_default();
+                d.inactive_participants = row.get("inactive_participants").unwrap_or_default();
+                d.registered_speakers = row.get("registered_speakers").unwrap_or_default();
+                d.commenters = row.get("commenters").unwrap_or_default();
+                d.score = row.get("score").unwrap_or_default();
+                d.topic = row.get("topic").unwrap_or_default();
+                d.category = row.get("category").unwrap_or_default();
+
+                Some(d)
+            }
+
+            Err(e) => {
+                println!("Error: {:#?}", e);
+
+                None
+            }
         }
+        .unwrap();
 
         if let Err(e) = tx.commit().await {
             println!("Error: {:#?}", e);
-        }
+        };
+
+        debate
     }
 
     pub async fn update_debate(&self, graph: Arc<Graph>) {

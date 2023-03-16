@@ -24,21 +24,38 @@ impl User {
         }
     }
 
-    pub async fn create(&self, graph: Arc<Graph>) {
-        let q =
-            Query::new("CREATE (u:User {id: $id,  simulation_data: $simulation_data})".to_string())
-                .param("id", Uuid::new_v4().to_string())
-                .param("simulation_data", self.simulation_data.to_string());
+    pub async fn create(&self, graph: Arc<Graph>) -> String {
+        let q = Query::new(
+            "CREATE (u:User {id: $id,  simulation_data: $simulation_data}) RETURN(u.id)"
+                .to_string(),
+        )
+        .param("id", Uuid::new_v4().to_string())
+        .param("simulation_data", self.simulation_data.to_string());
 
         let tx = graph.start_txn().await.unwrap();
 
-        if let Err(e) = tx.run(q).await {
-            println!("Error: {:#?}", e);
+        let id = match tx.execute(q).await {
+            Ok(mut res) => {
+                let row = res.next().await.unwrap().unwrap();
+
+                let id = row.get("(u.id)");
+
+                id
+            }
+
+            Err(e) => {
+                println!("Error: {:#?}", e);
+
+                None
+            }
         }
+        .unwrap();
 
         if let Err(e) = tx.commit().await {
             println!("Error: {:#?}", e);
-        }
+        };
+
+        id
     }
 
     pub async fn get_user(&self, graph: Graph) {
