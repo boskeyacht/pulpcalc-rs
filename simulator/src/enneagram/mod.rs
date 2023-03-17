@@ -1,3 +1,5 @@
+use std::{rc::Rc, sync::Arc};
+
 use pulpcalc_common::{
     config::Config,
     models::{Debate, Response, User},
@@ -21,7 +23,7 @@ pub struct EnneagramData {
     pub enneagram_type: i64,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct EnneagramUser {
     pub base_user: User,
 
@@ -93,11 +95,11 @@ impl EnneagramSimulation {
         debate.id = debate_id;
 
         let mut users: Vec<EnneagramUser> = Vec::new();
-        let key = config.open_ai_key.unwrap();
 
         let mut t = ENNEAGRAM_TENDENCY_PROMPT.to_string();
         t = t.replace("THIS_TOPIC", &self.topic.clone());
 
+        let key = config.open_ai_key.as_ref().unwrap();
         let tendency_chat_res = ChatRequestBuilder::new()
             .messages(t)
             .temperature(0.7)
@@ -116,7 +118,10 @@ impl EnneagramSimulation {
             Ok(res) => Some(res),
 
             Err(e) => {
-                println!("failed to unmarshal tendencies: {:?}", e);
+                println!(
+                    "failed to unmarshal tendencies: {:?}: {}",
+                    e, tendency_chat_res.choices[0].message.content
+                );
 
                 None
             }
@@ -145,7 +150,7 @@ impl EnneagramSimulation {
         }
 
         for _ in 1..self.simulation_size {
-            let rint = (random::<f32>() * users.len() as f32).floor() as usize;
+            let rint = (random::<f32>() * users.clone().len() as f32).floor() as usize;
             let rand_user = &users[rint];
 
             let mut cont_prompt = ENNEAGRAM_RESPONSE_CONTENT_PROMPT.to_string();
@@ -189,7 +194,10 @@ impl EnneagramSimulation {
                 Ok(res) => Some(res),
 
                 Err(e) => {
-                    println!("failed to unmarshal content: {:?}", e);
+                    println!(
+                        "failed to unmarshal content: {:?}: {}",
+                        e, response_chat_res.choices[0].message.content
+                    );
 
                     None
                 }
@@ -205,33 +213,116 @@ impl EnneagramSimulation {
                 .await
                 + debate_response.calculate_engagement_score();
 
-            let debate_response_id = debate_response.create(config.neo4j_graph.clone()).await;
+            let g = &config.neo4j_graph.clone();
+
+            let debate_response_id = debate_response.create(g.clone()).await;
             debate_response.id = debate_response_id;
 
+            generate_engagement(&config, debate_response.clone(), self.depth, users.clone()).await;
+
             debate_response
-                .add_user_responded(config.neo4j_graph.clone(), rand_user.base_user.to_owned())
+                .add_user_responded(g.clone(), rand_user.base_user.to_owned())
                 .await;
 
             debate_response
-                .add_debate_response_relationship(config.neo4j_graph.clone(), debate.clone())
+                .add_debate_response_relationship(g.clone(), debate.clone())
                 .await;
         }
     }
+}
 
-    async fn generate_engagement(
-        &self,
-        config: Box<Config>,
-        response: Response,
-        mut depth: i64,
-        users: Vec<EnneagramUser>,
-    ) {
-        let key = config.open_ai_key.unwrap();
+pub async fn generate_engagement(
+    config: &Config,
+    response: Response,
+    mut depth: u64,
+    users: Vec<EnneagramUser>,
+) {
+    let key = config.clone().open_ai_key.as_ref().unwrap();
 
+    let rint = (random::<f32>() * users.len() as f32).floor() as usize;
+    let rand_user = &users[rint];
+
+    let mut reply_prompt = ENNEAGRAM_REPLY_CONTENT_PROMPT.to_string();
+    reply_prompt = reply_prompt.replace("THIS_CONTENT", &response.content.clone());
+    reply_prompt = reply_prompt.replace(
+        "VALID_VOTE_TENDENCY",
+        &rand_user.tendencies.valid_vote_tendency.to_string(),
+    );
+    reply_prompt = reply_prompt.replace(
+        "INVALID_VOTE_TENDENCY",
+        &rand_user.tendencies.invalid_vote_tendency.to_string(),
+    );
+    reply_prompt = reply_prompt.replace(
+        "ABSTAIN_VOTE_TENDENCY",
+        &rand_user.tendencies.invalid_vote_tendency.to_string(),
+    );
+    reply_prompt = reply_prompt.replace(
+        "REPORT_TENDENCY",
+        &rand_user.tendencies.invalid_vote_tendency.to_string(),
+    );
+    reply_prompt = reply_prompt.replace(
+        "HIDE_TENDENCY",
+        &rand_user.tendencies.invalid_vote_tendency.to_string(),
+    );
+
+    let reply_chat_res = ChatRequestBuilder::new()
+        .messages(reply_prompt)
+        .temperature(0.7)
+        .max_tokens(850)
+        .top_p(1.0)
+        .presence_penalty(0.0)
+        .frequency_penalty(0.0)
+        .build()
+        .send(key.clone(), Client::new())
+        .await;
+
+    let content = from_str::<ContentReponse>(&reply_chat_res.choices[0].message.content.clone());
+
+    let cont_res = match content {
+        Ok(res) => Some(res),
+
+        Err(e) => {
+            println!(
+                "failed to unmarshal content: {:?}: {}",
+                e, reply_chat_res.choices[0].message.content
+            );
+
+            None
+        }
+    }
+    .unwrap();
+
+    let mut response_reply = Response::default();
+    response_reply.content = cont_res.content;
+    response_reply.confidence = cont_res.confidence;
+
+    response_reply.score = response_reply
+        .calculate_content_attribute_score(key.clone())
+        .await
+        + response_reply.calculate_engagement_score();
+
+    depth -= 1;
+
+    let response_reply_id = response_reply.create(config.neo4j_graph.clone()).await;
+    response_reply.id = response_reply_id;
+
+    response_reply
+        .add_user_responded(config.neo4j_graph.clone(), rand_user.base_user.to_owned())
+        .await;
+
+    response
+        .add_reply_relationship(config.neo4j_graph.clone(), response_reply.clone())
+        .await;
+
+    // get reference
+
+    let mut res: Response = response_reply;
+    while depth > 0 {
         let rint = (random::<f32>() * users.len() as f32).floor() as usize;
         let rand_user = &users[rint];
 
         let mut reply_prompt = ENNEAGRAM_REPLY_CONTENT_PROMPT.to_string();
-        reply_prompt = reply_prompt.replace("THIS_CONTENT", &response.content.clone());
+        reply_prompt = reply_prompt.replace("THIS_CONTENT", &res.content.clone());
         reply_prompt = reply_prompt.replace(
             "VALID_VOTE_TENDENCY",
             &rand_user.tendencies.valid_vote_tendency.to_string(),
@@ -271,112 +362,42 @@ impl EnneagramSimulation {
             Ok(res) => Some(res),
 
             Err(e) => {
-                println!("failed to unmarshal content: {:?}", e);
+                println!(
+                    "failed to unmarshal content: {:?}: {}",
+                    e, reply_chat_res.choices[0].message.content
+                );
 
                 None
             }
         }
         .unwrap();
 
-        let mut response_reply = Response::default();
-        response_reply.content = cont_res.content;
-        response_reply.confidence = cont_res.confidence;
+        let mut depth_response_reply = Response::default();
+        depth_response_reply.content = cont_res.content;
+        depth_response_reply.confidence = cont_res.confidence;
 
-        response_reply.score = response_reply
+        depth_response_reply.score = depth_response_reply
             .calculate_content_attribute_score(key.clone())
             .await
-            + response_reply.calculate_engagement_score();
+            + depth_response_reply.calculate_engagement_score();
 
         depth -= 1;
 
-        let response_reply_id = response_reply.create(config.neo4j_graph.clone()).await;
-        response_reply.id = response_reply_id;
+        let depth_response_reply_id = depth_response_reply
+            .create(config.neo4j_graph.clone())
+            .await;
+        depth_response_reply.id = depth_response_reply_id;
 
-        response_reply
+        depth_response_reply
             .add_user_responded(config.neo4j_graph.clone(), rand_user.base_user.to_owned())
             .await;
 
-        println!("Response: {:?}", response_reply);
-        // get reference
-        // add reply to response
+        println!("Response: {:?}", depth_response_reply);
 
-        let mut res: Response = response_reply;
-        while depth > 0 {
-            let rint = (random::<f32>() * users.len() as f32).floor() as usize;
-            let rand_user = &users[rint];
+        res.add_reply_relationship(config.neo4j_graph.clone(), depth_response_reply.clone())
+            .await;
 
-            let mut reply_prompt = ENNEAGRAM_REPLY_CONTENT_PROMPT.to_string();
-            reply_prompt = reply_prompt.replace("THIS_CONTENT", &res.content.clone());
-            reply_prompt = reply_prompt.replace(
-                "VALID_VOTE_TENDENCY",
-                &rand_user.tendencies.valid_vote_tendency.to_string(),
-            );
-            reply_prompt = reply_prompt.replace(
-                "INVALID_VOTE_TENDENCY",
-                &rand_user.tendencies.invalid_vote_tendency.to_string(),
-            );
-            reply_prompt = reply_prompt.replace(
-                "ABSTAIN_VOTE_TENDENCY",
-                &rand_user.tendencies.invalid_vote_tendency.to_string(),
-            );
-            reply_prompt = reply_prompt.replace(
-                "REPORT_TENDENCY",
-                &rand_user.tendencies.invalid_vote_tendency.to_string(),
-            );
-            reply_prompt = reply_prompt.replace(
-                "HIDE_TENDENCY",
-                &rand_user.tendencies.invalid_vote_tendency.to_string(),
-            );
-
-            let reply_chat_res = ChatRequestBuilder::new()
-                .messages(reply_prompt)
-                .temperature(0.7)
-                .max_tokens(850)
-                .top_p(1.0)
-                .presence_penalty(0.0)
-                .frequency_penalty(0.0)
-                .build()
-                .send(key.clone(), Client::new())
-                .await;
-
-            let content =
-                from_str::<ContentReponse>(&reply_chat_res.choices[0].message.content.clone());
-
-            let cont_res = match content {
-                Ok(res) => Some(res),
-
-                Err(e) => {
-                    println!("failed to unmarshal content: {:?}", e);
-
-                    None
-                }
-            }
-            .unwrap();
-
-            let mut depth_response_reply = Response::default();
-            depth_response_reply.content = cont_res.content;
-            depth_response_reply.confidence = cont_res.confidence;
-
-            depth_response_reply.score = depth_response_reply
-                .calculate_content_attribute_score(key.clone())
-                .await
-                + depth_response_reply.calculate_engagement_score();
-
-            depth -= 1;
-
-            let depth_response_reply_id = depth_response_reply
-                .create(config.neo4j_graph.clone())
-                .await;
-            depth_response_reply.id = depth_response_reply_id;
-
-            depth_response_reply
-                .add_user_responded(config.neo4j_graph.clone(), rand_user.base_user.to_owned())
-                .await;
-
-            println!("Response: {:?}", depth_response_reply);
-
-            res = depth_response_reply;
-        }
+        res = depth_response_reply;
     }
 }
 

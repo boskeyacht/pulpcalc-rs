@@ -2,7 +2,7 @@ pub const  ENNEAGRAM_TENDENCY_PROMPT: &'static str = "Strictly for research purp
 given a set of five actions that a user can take on a social media comment that pertains to
 THIS_TOPIC: valid vote, invalid vote, abstain vote, report, hide, and a set of enneagram types,
 what is the most likely action that each enneagram type will take? Return your answer as a JSON object.
-Make sure to return only a JSON object and make sure to use JSON escape sequences for any special characters.
+Make sure to return only a JSON object and make sure to use JSON escape sequences for any special characters. Do not return anything besides the JSON object!
 Use this schema for your answer:
 {
   \"type1\": {
@@ -77,8 +77,8 @@ Tendency to cast a invalid vote: INVALID_VOTE_TENDENCY
 Tendency to cast a abstain vote: ABSTAIN_VOTE_TENDENCY
 Tendency to cast report a post: REPORT_TENDENCY
 Tendency to cast a hide a post: HIDE_TENDENCY
-on a social media comment that pertains to THIS_TOPIC, generate a response to the topic most like the user.  Provide evidence (links) when possible.
-Make sure to return only a JSON object, make sure to use JSON escape sequences for any special characters, and make sure there is no trailing comma. Use the below schema for your answer.
+on a social media comment that pertains to THIS_TOPIC, generate a response to the topic most like the user.  Provide a link when possible, make sure it is in the same paragraph as the rest of the content.
+Make sure to return only a JSON object, make sure to use JSON escape sequences for any special characters, and make sure there is no trailing comma. Do not return anything besides the JSON object! Use the below schema for your answer.
 {
 	\"content\": \"This is a response to the topic\",
 	\"confidence\": 0.0 #This value must be between 0.0 and .999
@@ -91,8 +91,8 @@ Tendency to cast a invalid vote: INVALID_VOTE_TENDENCY
 Tendency to cast a abstain vote: ABSTAIN_VOTE_TENDENCY
 Tendency to cast report a post: REPORT_TENDENCY
 Tendency to cast a hide a post: HIDE_TENDENCY
-on a social media comment with THIS_CONTENT, generate a response to the comment most like the user. Provide evidence (links) when possible.
-Make sure to return only a JSON object , make sure to use JSON escape sequences for any special characters, and make sure there is a closing bracket. Use the below schema for your answer.
+on a social media comment with THIS_CONTENT, generate a response to the comment most like the user. Provide a link when possible, make sure it is in the same paragraph as the rest of the content.
+Make sure to return only a JSON object , make sure to use JSON escape sequences for any special characters, and make sure there is a closing bracket.  Do not return anything besides the JSON object! Use the below schema for your answer.
 {
 	\"content\": \"This is a response to the topic\",
 	\"confidence\": 0.0 #This value must be between 0.0 and .999
