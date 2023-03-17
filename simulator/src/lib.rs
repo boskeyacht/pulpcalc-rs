@@ -1,4 +1,4 @@
-pub mod business_analytics;
+pub mod business;
 pub mod enneagram;
 
 mod util;

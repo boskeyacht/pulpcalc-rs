@@ -1,11 +1,10 @@
-use std::{rc::Rc, sync::Arc};
-
 use pulpcalc_common::{
     config::Config,
-    models::{Debate, Response, User},
+    models::{Debate, Reference, Response, User},
 };
 use pulpcalc_external::chatgpt::ChatRequestBuilder;
 use rand::prelude::*;
+use regex::Regex;
 use reqwest::Client;
 use serde::Deserialize;
 use serde_json::from_str;
@@ -205,7 +204,7 @@ impl EnneagramSimulation {
             .unwrap();
 
             let mut debate_response = Response::default();
-            debate_response.content = cont_res.content;
+            debate_response.content = cont_res.content.clone();
             debate_response.confidence = cont_res.confidence;
 
             debate_response.score = debate_response
@@ -217,6 +216,19 @@ impl EnneagramSimulation {
 
             let debate_response_id = debate_response.create(g.clone()).await;
             debate_response.id = debate_response_id;
+
+            let re = Regex::new(r"/(?:(?:https?|ftp|file):\\|www\\.|ftp\\.)(?:\\([-A-Z0-9+&@#\\%=~_|$?!:,.]*\\)|[-A-Z0-9+&@#\\%=~_|$?!:,.])*(?:\\([-A-Z0-9+&@#\\%=~_|$?!:,.]*\\)|[A-Z0-9+&@#\\%=~_|$])/igm").unwrap();
+            for link in re.find_iter(cont_res.content.as_str()) {
+                let mut reference = Reference::default();
+                reference.content = link.as_str().to_string();
+
+                reference.create(config.neo4j_graph.clone()).await;
+
+                debate_response
+                    .clone()
+                    .add_has_referecne(config.neo4j_graph.clone(), reference)
+                    .await;
+            }
 
             generate_engagement(&config, debate_response.clone(), self.depth, users.clone()).await;
 
@@ -293,7 +305,7 @@ pub async fn generate_engagement(
     .unwrap();
 
     let mut response_reply = Response::default();
-    response_reply.content = cont_res.content;
+    response_reply.content = cont_res.content.clone();
     response_reply.confidence = cont_res.confidence;
 
     response_reply.score = response_reply
@@ -305,6 +317,19 @@ pub async fn generate_engagement(
 
     let response_reply_id = response_reply.create(config.neo4j_graph.clone()).await;
     response_reply.id = response_reply_id;
+
+    let re = Regex::new(r"/(?:(?:https?|ftp|file):\\|www\\.|ftp\\.)(?:\\([-A-Z0-9+&@#\\%=~_|$?!:,.]*\\)|[-A-Z0-9+&@#\\%=~_|$?!:,.])*(?:\\([-A-Z0-9+&@#\\%=~_|$?!:,.]*\\)|[A-Z0-9+&@#\\%=~_|$])/igm").unwrap();
+    for link in re.find_iter(cont_res.content.as_str()) {
+        let mut reference = Reference::default();
+        reference.content = link.as_str().to_string();
+
+        reference.create(config.neo4j_graph.clone()).await;
+
+        response_reply
+            .clone()
+            .add_has_referecne(config.neo4j_graph.clone(), reference)
+            .await;
+    }
 
     response_reply
         .add_user_responded(config.neo4j_graph.clone(), rand_user.base_user.to_owned())
@@ -373,7 +398,7 @@ pub async fn generate_engagement(
         .unwrap();
 
         let mut depth_response_reply = Response::default();
-        depth_response_reply.content = cont_res.content;
+        depth_response_reply.content = cont_res.content.clone();
         depth_response_reply.confidence = cont_res.confidence;
 
         depth_response_reply.score = depth_response_reply
@@ -387,6 +412,19 @@ pub async fn generate_engagement(
             .create(config.neo4j_graph.clone())
             .await;
         depth_response_reply.id = depth_response_reply_id;
+
+        let re = Regex::new(r"/(?:(?:https?|ftp|file):\\|www\\.|ftp\\.)(?:\\([-A-Z0-9+&@#\\%=~_|$?!:,.]*\\)|[-A-Z0-9+&@#\\%=~_|$?!:,.])*(?:\\([-A-Z0-9+&@#\\%=~_|$?!:,.]*\\)|[A-Z0-9+&@#\\%=~_|$])/igm").unwrap();
+        for link in re.find_iter(cont_res.content.as_str()) {
+            let mut reference = Reference::default();
+            reference.content = link.as_str().to_string();
+
+            reference.create(config.neo4j_graph.clone()).await;
+
+            depth_response_reply
+                .clone()
+                .add_has_referecne(config.neo4j_graph.clone(), reference)
+                .await;
+        }
 
         depth_response_reply
             .add_user_responded(config.neo4j_graph.clone(), rand_user.base_user.to_owned())

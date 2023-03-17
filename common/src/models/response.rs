@@ -348,7 +348,7 @@ impl Response {
         }
     }
 
-    pub async fn add_has_referecne(&self, graph: Graph, reference: Reference) {
+    pub async fn add_has_referecne(&self, graph: Arc<Graph>, reference: Reference) {
         let q = Query::new("MATCH (r:Response {id: $id}) MATCH (ref:Reference {id: $reference_id}) CREATE (r)-[:HAS_REFERENCE]->(ref)".to_string())
             .param("id", self.id.clone())
             .param("reference_id", reference.id.clone());
