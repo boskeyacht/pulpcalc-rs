@@ -27,7 +27,7 @@ impl Reference {
         }
     }
 
-    pub async fn create(&self, graph: Arc<Graph>) -> String {
+    pub async fn create(&self, graph: &Graph) -> String {
         let q = Query::new("CREATE (r:Reference {id: $id, internal: $internal, trust: $trust, distrust: $distrust, content: $content}) RETURN(r.id)".to_string())
             .param("id", Uuid::new_v4().to_string())
             .param("internal", self.internal.to_string())
@@ -61,7 +61,7 @@ impl Reference {
         id
     }
 
-    pub async fn get_reference(&self, graph: Graph) {
+    pub async fn get_reference(&self, graph: &Graph) {
         let q = Query::new("MATCH (r:Reference {id: $id})".to_string())
             .param("id", Uuid::new_v4().to_string());
 
@@ -76,7 +76,7 @@ impl Reference {
         }
     }
 
-    pub async fn update_reference(&self, graph: Graph) {
+    pub async fn update_reference(&self, graph: &Graph) {
         let q = Query::new("MATCH (r:Reference {id: $id})".to_string())
             .param("id", Uuid::new_v4().to_string());
 
@@ -91,7 +91,7 @@ impl Reference {
         }
     }
 
-    pub async fn delete_reference(&self, graph: Graph) {
+    pub async fn delete_reference(&self, graph: &Graph) {
         let q = Query::new("MATCH (r:Reference {id: $id})".to_string())
             .param("id", Uuid::new_v4().to_string());
 

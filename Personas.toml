@@ -1,0 +1,35 @@
+adults_only = true
+exclusive_debate = true
+debate_topics = ["Is america more divided than ever when it comes to politics?"]
+debate_categories = ["politics"]
+simulation_size = 150
+max_keynote_speakers = 50
+max_voters = 1000
+max_references = 10
+
+[user_restrictions]
+min_user_score = 0
+max_user_score = 20000
+male_distribution = 0.40
+female_distribution = 0.40
+other_distribution = 0.20
+not_saying_gender_distribution = 0.00
+min_age = 18
+max_age = 60
+right_leaning_distribution = 0.40
+left_leaning_distribution = 0.40
+center_leaning_distribution = 0.20
+logos_level = 3
+pathos_level = 1
+ethos_level = 2
+vote_valid_reason = [0.20, 0.40, 0.40]
+vote_invalid_reason = [0.40, 0.20, 0.40]
+vote_abstain_reason = [0.40, 0.40, 0.20]
+
+[debate_rules]
+vote_limit = 2
+references_allowed = true 
+must_include_reference_count = 0
+banned_publications = ["cnn.com"]
+supported_publications = ["zerohedge.com"]
+banned_words = ["banned_word"]

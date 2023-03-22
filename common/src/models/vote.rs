@@ -11,6 +11,17 @@ impl Default for VoteType {
     }
 }
 
+impl From<&str> for VoteType {
+    fn from(s: &str) -> Self {
+        match s {
+            "valid" => VoteType::Valid(None),
+            "invalid" => VoteType::Invalid(None),
+            "abstain" => VoteType::Abstain(None),
+            _ => VoteType::Abstain(None),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct Vote {
     /// The id of the vote

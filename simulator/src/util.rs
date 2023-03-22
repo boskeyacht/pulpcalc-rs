@@ -1,4 +1,6 @@
+use crate::business::BusinessSimulation;
 use crate::enneagram::EnneagramSimulation;
+use crate::personas::PerosnasSimulationConfig;
 use std::fs;
 use toml;
 
@@ -36,4 +38,43 @@ pub fn new_enneagram_from_file(file: &str) -> Vec<EnneagramSimulation> {
     });
 
     sims
+}
+
+pub fn new_personas_from_file(file: String) -> PerosnasSimulationConfig {
+    let contents = match fs::read_to_string(file) {
+        Ok(c) => c,
+
+        Err(e) => {
+            println!("{}", e);
+
+            std::process::exit(1);
+        }
+    };
+
+    let personas: PerosnasSimulationConfig = match toml::from_str(&contents) {
+        Ok(p) => p,
+
+        Err(e) => {
+            println!("{}", e);
+
+            std::process::exit(1);
+        }
+    };
+
+    personas
+}
+
+pub fn new_business_from_file(file: String) -> Vec<BusinessSimulation> {
+    let businesses: Vec<BusinessSimulation> = Vec::new();
+    let contents = match fs::read_to_string(file) {
+        Ok(c) => c,
+
+        Err(e) => {
+            println!("{}", e);
+
+            std::process::exit(1);
+        }
+    };
+
+    businesses
 }

@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use super::engagements::Engagements;
 use super::reference::Reference;
 use super::user::User;
@@ -31,8 +29,6 @@ pub struct Response {
 
     pub hide_count: i64,
 
-    pub author_id: String,
-
     pub topic_of_response: String,
 
     pub replies: Vec<Response>,
@@ -53,7 +49,6 @@ impl Response {
         abstain_vote_count: i64,
         report_count: i64,
         hide_count: i64,
-        author_id: String,
         topic_of_response: String,
         replies: Vec<Response>,
         attributes: Attributes,
@@ -69,7 +64,6 @@ impl Response {
             abstain_vote_count,
             report_count,
             hide_count,
-            author_id,
             topic_of_response,
             replies,
             attributes,
@@ -78,7 +72,6 @@ impl Response {
     }
 
     // State variables for readbility
-
     pub fn calculate_engagement_score(&mut self) -> i64 {
         // let mut report_harmful_to_others = 0;
         // let mut report_abuse_of_platform = 0;
@@ -207,7 +200,8 @@ impl Response {
 
             word_count = self.content.split_whitespace().count() as i64;
 
-            init_score += (mastery_vocabulary + word_count) * (relevance + soundness) as i64;
+            init_score +=
+                (mastery_vocabulary + self.invalid_vote_count) * (relevance + soundness) as i64;
 
             self.attributes = Attributes::new(
                 relevance,
@@ -228,15 +222,23 @@ impl Response {
         0
     }
 
-    // ----------------------------------
-    //           Neo4j Methods          -
-    // ----------------------------------
-    pub async fn create(&self, graph: Arc<Graph>) -> String {
+    // ==================================
+    //           Neo4j Methods          =
+    // ==================================
+
+    pub async fn create(&self, graph: &Graph) -> String {
         let q = Query::new(
-            "CREATE (r:Response {id: $id, content: $content}) RETURN (r.id)".to_string(),
+            "CREATE (r:Response {id: $id, content: $content, score: $score, valid_vote_count: $vvc, invalid_vote_count: $ivc, abstain_vote_count: $avc, hide_count: $hide_count, report_count: $report_count, replies: $replies}) RETURN (r.id)".to_string(),
         )
         .param("id", Uuid::new_v4().to_string())
-        .param("content", self.content.to_string());
+        .param("content", self.content.to_string())
+        .param("score", 0)
+        .param("vvc", 0)
+        .param("ivc", 0)
+        .param("avc", 0)
+        .param("hide_count", 0)
+        .param("report_count", 0)
+        .param("replies", vec![""]);
 
         let tx = graph.start_txn().await.unwrap();
 
@@ -264,7 +266,7 @@ impl Response {
         id
     }
 
-    pub async fn get_response(&self, graph: Graph) -> Self {
+    pub async fn get_response(&self, graph: &Graph) -> Self {
         let q = Query::new("MATCH (r:Response {id: $id})".to_string()).param("id", self.id.clone());
 
         let tx = graph.start_txn().await.unwrap();
@@ -295,16 +297,15 @@ impl Response {
         response
     }
 
-    pub async fn update_response(&self, graph: Graph) {
-        let q = Query::new("MATCH (r:Response {id: $id} SET r.content = $content, r.confidence = $confidence, r.score = $score, r.valid_vote_count = $vvc, r.invalid_vote_count = $ivc, r.abstain_vote_count = $avc, r.author_id = $author_id)".to_string())
+    pub async fn update_response(&self, graph: &Graph) {
+        let q = Query::new("MATCH (r:Response {id: $id}) SET r.content = $content, r.confidence = $confidence, r.score = $score, r.valid_vote_count = $vvc, r.invalid_vote_count = $ivc, r.abstain_vote_count = $avc, r.author_id = $author_id)".to_string())
             .param("id", self.id.clone())
             .param("content", self.content.clone())
             .param("confidence", self.confidence.to_string())
             .param("score", self.score)
             .param("vvc", self.valid_vote_count)
             .param("ivc", self.invalid_vote_count)
-            .param("avc", self.abstain_vote_count)
-            .param("author_id", self.author_id.clone());
+            .param("avc", self.abstain_vote_count);
 
         let tx = graph.start_txn().await.unwrap();
 
@@ -317,7 +318,73 @@ impl Response {
         }
     }
 
-    pub async fn delete_response(&self, graph: Graph) {
+    pub async fn update_valid_vote_count(&self, graph: &Graph, count: i64) {
+        let q =
+            Query::new("MATCH (r:Response {id: $id}) SET r.valid_vote_count = $vvc".to_string())
+                .param("id", self.id.clone())
+                .param("vvc", count);
+
+        let tx = graph.start_txn().await.unwrap();
+
+        if let Err(e) = tx.run(q).await {
+            println!("Error: {:#?}", e);
+        }
+
+        if let Err(e) = tx.commit().await {
+            println!("Error: {:#?}", e);
+        }
+    }
+
+    pub async fn update_invalid_vote_count(&self, graph: &Graph, count: i64) {
+        let q =
+            Query::new("MATCH (r:Response {id: $id}) SET r.invalid_vote_count = $ivc".to_string())
+                .param("id", self.id.clone())
+                .param("ivc", count);
+
+        let tx = graph.start_txn().await.unwrap();
+
+        if let Err(e) = tx.run(q).await {
+            println!("Error: {:#?}", e);
+        }
+
+        if let Err(e) = tx.commit().await {
+            println!("Error: {:#?}", e);
+        }
+    }
+    pub async fn update_abstain_vote_count(&self, graph: &Graph, count: i64) {
+        let q =
+            Query::new("MATCH (r:Response {id: $id}) SET r.abstain_vote_count = $avc".to_string())
+                .param("id", self.id.clone())
+                .param("avc", count);
+
+        let tx = graph.start_txn().await.unwrap();
+
+        if let Err(e) = tx.run(q).await {
+            println!("Error: {:#?}", e);
+        }
+
+        if let Err(e) = tx.commit().await {
+            println!("Error: {:#?}", e);
+        }
+    }
+
+    pub async fn update_score(&self, graph: &Graph, score: i64) {
+        let q = Query::new("MATCH (r:Response {id: $id}) SET r.score = $score".to_string())
+            .param("id", self.id.clone())
+            .param("score", score);
+
+        let tx = graph.start_txn().await.unwrap();
+
+        if let Err(e) = tx.run(q).await {
+            println!("Error: {:#?}", e);
+        }
+
+        if let Err(e) = tx.commit().await {
+            println!("Error: {:#?}", e);
+        }
+    }
+
+    pub async fn delete_response(&self, graph: &Graph) {
         let q = Query::new("MATCH (r:Response {id: $id}) DETACH DELETE r".to_string())
             .param("id", self.id.clone());
 
@@ -332,7 +399,7 @@ impl Response {
         }
     }
 
-    pub async fn add_user_responded(&self, graph: Arc<Graph>, user: User) {
+    pub async fn add_user_responded(&self, graph: &Graph, user: User) {
         let q = Query::new("MATCH (r:Response {id: $id}) MATCH (u:User {id: $user_id}) CREATE (u)-[:RESPONDED]->(r)".to_string())
             .param("id", self.id.clone())
             .param("user_id", user.id.clone());
@@ -348,7 +415,7 @@ impl Response {
         }
     }
 
-    pub async fn add_has_referecne(&self, graph: Arc<Graph>, reference: Reference) {
+    pub async fn add_has_referecne(&self, graph: &Graph, reference: Reference) {
         let q = Query::new("MATCH (r:Response {id: $id}) MATCH (ref:Reference {id: $reference_id}) CREATE (r)-[:HAS_REFERENCE]->(ref)".to_string())
             .param("id", self.id.clone())
             .param("reference_id", reference.id.clone());
@@ -364,7 +431,7 @@ impl Response {
         }
     }
 
-    pub async fn add_reply_relationship(&self, graph: Arc<Graph>, reply: Self) {
+    pub async fn add_reply_relationship(&self, graph: &Graph, reply: Self) {
         let q = Query::new("MATCH (r:Response {id: $id}) MATCH (rep:Response {id: $reply_id}) CREATE (r)-[:REPLIED]->(rep)".to_string())
             .param("id", self.id.clone())
             .param("reply_id", reply.id.clone());
@@ -380,7 +447,7 @@ impl Response {
         }
     }
 
-    pub async fn add_debate_response_relationship(&self, graph: Arc<Graph>, debate: Debate) {
+    pub async fn add_debate_response_relationship(&self, graph: &Graph, debate: Debate) {
         let q = Query::new("MATCH (r:Response {id: $id}) MATCH (d:Debate {id: $debate_id}) CREATE (r)-[:RESPONSE]->(d)".to_string())
             .param("id", self.id.clone())
             .param("debate_id", debate.id.clone());

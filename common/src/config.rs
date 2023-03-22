@@ -32,7 +32,7 @@ pub struct Config {
     /// Neo4j database password
     pub neo_password: Option<String>,
 
-    pub open_ai_key: Option<String>,
+    pub open_ai_key: String,
 
     pub neo4j_graph: Arc<Graph>,
 }
@@ -52,13 +52,22 @@ impl Config {
             neo_endpoint: None,
             neo_user: None,
             neo_password: None,
-            open_ai_key: None,
+            open_ai_key: "".to_string(),
             neo4j_graph: Arc::new(g),
         }
     }
 
     pub async fn init() -> Self {
         let mut config = Config::default().await;
+
+        let open_ai = match env::var("OPENAI_KEY").ok() {
+            Some(key) => key,
+            None => {
+                println!("OPENAI_KEY not found");
+
+                std::process::exit(1);
+            }
+        };
 
         config.reddit_app_id = env::var("REDDIT_APP_ID").ok();
         config.reddit_secret_key = env::var("REDDIT_SECRET_KEY").ok();
@@ -70,24 +79,18 @@ impl Config {
         config.neo_endpoint = env::var("NEO_ENDPOINT").ok();
         config.neo_user = env::var("NEO_USER").ok();
         config.neo_password = env::var("NEO_PASSWORD").ok();
-        config.open_ai_key = env::var("OPENAI_KEY").ok();
+        config.open_ai_key = open_ai;
 
-        let g = Graph::new(
-            &config.neo_endpoint.clone().unwrap(),
-            &config.neo_user.clone().unwrap(),
-            &config.neo_password.clone().unwrap(),
-        )
-        .await;
-
-        match g {
-            Ok(g) => {
-                config.neo4j_graph = Arc::new(g);
-            }
-
-            Err(e) => {
-                println!("Error: {:#?}", e);
-            }
-        };
+        let g = Arc::new(
+            Graph::new(
+                &config.neo_endpoint.clone().unwrap(),
+                &config.neo_user.clone().unwrap(),
+                &config.neo_password.clone().unwrap(),
+            )
+            .await
+            .unwrap(),
+        );
+        config.neo4j_graph = g;
 
         config
     }

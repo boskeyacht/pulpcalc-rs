@@ -10,12 +10,12 @@ use serde::Deserialize;
 use serde_json::from_str;
 
 use crate::enneagram::chat_responses::{ActionTendencies, ContentReponse, TendencyRespose};
-use crate::enneagram::enneagram_prompts::{
+use crate::enneagram::prompts::{
     ENNEAGRAM_REPLY_CONTENT_PROMPT, ENNEAGRAM_RESPONSE_CONTENT_PROMPT, ENNEAGRAM_TENDENCY_PROMPT,
 };
 
 mod chat_responses;
-mod enneagram_prompts;
+mod prompts;
 
 #[derive(Debug, Default)]
 pub struct EnneagramData {
@@ -90,7 +90,7 @@ impl EnneagramSimulation {
     }
 
     pub async fn run_simulation(&self, config: Config, mut debate: Debate) {
-        let debate_id = debate.create(config.neo4j_graph.clone()).await;
+        let debate_id = debate.create(&config.neo4j_graph).await;
         debate.id = debate_id;
 
         let mut users: Vec<EnneagramUser> = Vec::new();
@@ -98,7 +98,7 @@ impl EnneagramSimulation {
         let mut t = ENNEAGRAM_TENDENCY_PROMPT.to_string();
         t = t.replace("THIS_TOPIC", &self.topic.clone());
 
-        let key = config.open_ai_key.as_ref().unwrap();
+        let key = config.open_ai_key.clone();
         let tendency_chat_res = ChatRequestBuilder::new()
             .messages(t)
             .temperature(0.7)
@@ -135,11 +135,11 @@ impl EnneagramSimulation {
                 let mut user = EnneagramUser::default();
                 user.tendencies = t_res.clone().map_user_tendencies(i as i64);
 
-                let user_id = user.base_user.create(config.neo4j_graph.clone()).await;
+                let user_id = user.base_user.create(&config.neo4j_graph).await;
                 user.base_user.id = user_id;
 
                 debate
-                    .add_participant(config.neo4j_graph.clone(), user.base_user.clone())
+                    .add_participant(&config.neo4j_graph, user.base_user.clone())
                     .await;
 
                 users.push(user);
@@ -212,9 +212,7 @@ impl EnneagramSimulation {
                 .await
                 + debate_response.calculate_engagement_score();
 
-            let g = &config.neo4j_graph.clone();
-
-            let debate_response_id = debate_response.create(g.clone()).await;
+            let debate_response_id = debate_response.create(&config.neo4j_graph).await;
             debate_response.id = debate_response_id;
 
             let re = Regex::new(r"/(?:(?:https?|ftp|file):\\|www\\.|ftp\\.)(?:\\([-A-Z0-9+&@#\\%=~_|$?!:,.]*\\)|[-A-Z0-9+&@#\\%=~_|$?!:,.])*(?:\\([-A-Z0-9+&@#\\%=~_|$?!:,.]*\\)|[A-Z0-9+&@#\\%=~_|$])/igm").unwrap();
@@ -222,22 +220,22 @@ impl EnneagramSimulation {
                 let mut reference = Reference::default();
                 reference.content = link.as_str().to_string();
 
-                reference.create(config.neo4j_graph.clone()).await;
+                reference.create(&config.neo4j_graph).await;
 
                 debate_response
                     .clone()
-                    .add_has_referecne(config.neo4j_graph.clone(), reference)
+                    .add_has_referecne(&config.neo4j_graph, reference)
                     .await;
             }
 
             generate_engagement(&config, debate_response.clone(), self.depth, users.clone()).await;
 
             debate_response
-                .add_user_responded(g.clone(), rand_user.base_user.to_owned())
+                .add_user_responded(&config.neo4j_graph, rand_user.base_user.to_owned())
                 .await;
 
             debate_response
-                .add_debate_response_relationship(g.clone(), debate.clone())
+                .add_debate_response_relationship(&config.neo4j_graph, debate.clone())
                 .await;
         }
     }
@@ -249,7 +247,7 @@ pub async fn generate_engagement(
     mut depth: u64,
     users: Vec<EnneagramUser>,
 ) {
-    let key = config.clone().open_ai_key.as_ref().unwrap();
+    let key = config.open_ai_key.clone();
 
     let rint = (random::<f32>() * users.len() as f32).floor() as usize;
     let rand_user = &users[rint];
@@ -315,7 +313,7 @@ pub async fn generate_engagement(
 
     depth -= 1;
 
-    let response_reply_id = response_reply.create(config.neo4j_graph.clone()).await;
+    let response_reply_id = response_reply.create(&config.neo4j_graph).await;
     response_reply.id = response_reply_id;
 
     let re = Regex::new(r"/(?:(?:https?|ftp|file):\\|www\\.|ftp\\.)(?:\\([-A-Z0-9+&@#\\%=~_|$?!:,.]*\\)|[-A-Z0-9+&@#\\%=~_|$?!:,.])*(?:\\([-A-Z0-9+&@#\\%=~_|$?!:,.]*\\)|[A-Z0-9+&@#\\%=~_|$])/igm").unwrap();
@@ -323,20 +321,20 @@ pub async fn generate_engagement(
         let mut reference = Reference::default();
         reference.content = link.as_str().to_string();
 
-        reference.create(config.neo4j_graph.clone()).await;
+        reference.create(&config.neo4j_graph).await;
 
         response_reply
             .clone()
-            .add_has_referecne(config.neo4j_graph.clone(), reference)
+            .add_has_referecne(&config.neo4j_graph, reference)
             .await;
     }
 
     response_reply
-        .add_user_responded(config.neo4j_graph.clone(), rand_user.base_user.to_owned())
+        .add_user_responded(&config.neo4j_graph, rand_user.base_user.to_owned())
         .await;
 
     response
-        .add_reply_relationship(config.neo4j_graph.clone(), response_reply.clone())
+        .add_reply_relationship(&config.neo4j_graph, response_reply.clone())
         .await;
 
     // get reference
@@ -408,9 +406,7 @@ pub async fn generate_engagement(
 
         depth -= 1;
 
-        let depth_response_reply_id = depth_response_reply
-            .create(config.neo4j_graph.clone())
-            .await;
+        let depth_response_reply_id = depth_response_reply.create(&config.neo4j_graph).await;
         depth_response_reply.id = depth_response_reply_id;
 
         let re = Regex::new(r"/(?:(?:https?|ftp|file):\\|www\\.|ftp\\.)(?:\\([-A-Z0-9+&@#\\%=~_|$?!:,.]*\\)|[-A-Z0-9+&@#\\%=~_|$?!:,.])*(?:\\([-A-Z0-9+&@#\\%=~_|$?!:,.]*\\)|[A-Z0-9+&@#\\%=~_|$])/igm").unwrap();
@@ -418,21 +414,21 @@ pub async fn generate_engagement(
             let mut reference = Reference::default();
             reference.content = link.as_str().to_string();
 
-            reference.create(config.neo4j_graph.clone()).await;
+            reference.create(&config.neo4j_graph).await;
 
             depth_response_reply
                 .clone()
-                .add_has_referecne(config.neo4j_graph.clone(), reference)
+                .add_has_referecne(&config.neo4j_graph, reference)
                 .await;
         }
 
         depth_response_reply
-            .add_user_responded(config.neo4j_graph.clone(), rand_user.base_user.to_owned())
+            .add_user_responded(&config.neo4j_graph, rand_user.base_user.to_owned())
             .await;
 
         println!("Response: {:?}", depth_response_reply);
 
-        res.add_reply_relationship(config.neo4j_graph.clone(), depth_response_reply.clone())
+        res.add_reply_relationship(&config.neo4j_graph, depth_response_reply.clone())
             .await;
 
         res = depth_response_reply;

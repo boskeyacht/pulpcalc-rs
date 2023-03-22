@@ -28,7 +28,7 @@ pub struct ChatChoice {
 
 #[derive(Debug, Default, Deserialize)]
 pub struct ChatResponse {
-    pub id: String,
+    pub id: Option<String>,
 
     pub object: String,
 

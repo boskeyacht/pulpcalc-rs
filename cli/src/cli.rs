@@ -25,34 +25,40 @@ pub enum PulpCommand {
 
 #[derive(Subcommand, Debug, Clone)]
 pub enum SimCmd {
-    /// Generate a random debate
-    #[command(name = "generate")]
-    Generate(GenerateArgs),
-
     /// Simulate a debate with various user sets
     #[command(name = "enneagram")]
-    Enneagram(SetsArgs),
+    Enneagram(EnneagramArgs),
 
     #[command(name = "business")]
-    Business(SetsArgs),
+    Business(BusinessArgs),
+
+    #[command(name = "personas")]
+    Personas(PersonasArgs),
 }
 
 #[derive(Args, Debug, Clone)]
-pub struct GenerateArgs {
-    /// The amount of time to run the simulation for
-    #[arg(short, long)]
-    pub duration: i64,
-
-    /// The amount of users to create for the simulation
-    #[arg(short, long)]
-    pub users: i64,
-}
-
-#[derive(Args, Debug, Clone)]
-pub struct SetsArgs {
+pub struct EnneagramArgs {
     /// The config file to use for the simulation
     #[arg(short, long)]
     pub file: String,
+}
+
+#[derive(Args, Debug, Clone)]
+pub struct BusinessArgs {
+    /// The config file used for the simulation
+    #[arg(short, long)]
+    pub file: String,
+}
+
+#[derive(Args, Debug, Clone)]
+pub struct PersonasArgs {
+    /// The config file used for the simulation
+    #[arg(short, long)]
+    pub file: String,
+
+    /// Whether or not to initialize the neo4j database with a ser of users
+    #[arg(short, long)]
+    pub init: Option<i64>,
 }
 
 #[derive(Subcommand, Debug, Clone)]
