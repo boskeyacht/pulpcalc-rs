@@ -2,6 +2,7 @@
 
 # TODO
 
-- [ ] Custom errors (thiserror)
+- [x] Custom errors (thiserror)
 - [ ] Derive macros for simulations
-- [ ] Complete gpt client
+- [x] Complete gpt ~~client~~ trait/interafce
+- [ ] Scoring

@@ -1,9 +1,9 @@
 mod cli;
 
 use clap::Parser;
+use eyre::Result;
 use futures::future::join_all;
-use pulpcalc_common::{config::Config, models::Debate};
-use rand::prelude::*;
+use pulpcalc_common::prelude::*;
 use rand::prelude::*;
 use simulator::{
     new_business_from_file, new_enneagram_from_file, new_personas_from_file,
@@ -15,7 +15,7 @@ use simulator::{
 use tokio::task;
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<()> {
     let args = cli::Cli::parse();
 
     match args.commands {
@@ -140,7 +140,10 @@ async fn main() {
                         let mut user = users.pop().unwrap();
                         user.gender = Gender::from("male");
 
-                        let user_id = user.create(&cfg.neo4j_graph).await;
+                        let user_id = user
+                            .create(&cfg.neo4j_graph)
+                            .await
+                            .expect("failed to create user");
                         user.base_user.id = user_id;
 
                         mdu.push(user);
@@ -162,7 +165,10 @@ async fn main() {
                         let mut user = users.pop().unwrap();
                         user.gender = Gender::from("female");
 
-                        let user_id = user.create(&cfg.neo4j_graph).await;
+                        let user_id = user
+                            .create(&cfg.neo4j_graph)
+                            .await
+                            .expect("failed to create user");
                         user.base_user.id = user_id;
 
                         fdu.push(user);
@@ -184,7 +190,10 @@ async fn main() {
                         let mut user = users.pop().unwrap();
                         user.gender = Gender::from("other");
 
-                        let user_id = user.create(&cfg.neo4j_graph).await;
+                        let user_id = user
+                            .create(&cfg.neo4j_graph)
+                            .await
+                            .expect("failed to create user");
                         user.base_user.id = user_id;
 
                         odu.push(user);
@@ -204,7 +213,10 @@ async fn main() {
                         let mut user = users.pop().unwrap();
                         user.gender = Gender::from("rather not say");
 
-                        let user_id = user.create(&cfg.neo4j_graph).await;
+                        let user_id = user
+                            .create(&cfg.neo4j_graph)
+                            .await
+                            .expect("failed to create user");
                         user.base_user.id = user_id;
 
                         rnsdu.push(user);
@@ -233,7 +245,7 @@ async fn main() {
                             cl.len()
                         );
 
-                        return;
+                        return Ok(());
                     }
                 } else {
                     todo!("Simulate an open debate")
@@ -258,7 +270,9 @@ async fn main() {
             }
         },
         None => {
-            println!("invalid command provided");
+            println!("No command given");
         }
-    }
+    };
+
+    Ok(())
 }

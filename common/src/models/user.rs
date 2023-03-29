@@ -1,3 +1,5 @@
+use crate::errors::{PulpError, SimulationError};
+
 use super::vote::Vote;
 use neo4rs::{Graph, Node, Query};
 use uuid::Uuid;
@@ -31,12 +33,13 @@ impl User {
         }
     }
 
-    pub async fn create(&self, graph: &Graph) -> String {
+    pub async fn create(&self, graph: &Graph) -> Result<String, PulpError> {
+        let id = Uuid::new_v4().to_string();
         let q = Query::new(
             "CREATE (u:User {id: $id,  debates: $debates, votes: $votes, simulation_data: $simulation_data}) RETURN(u.id)"
                 .to_string(),
         )
-        .param("id", Uuid::new_v4().to_string())
+        .param("id", id.clone())
         .param("debates", vec![""])
         .param("votes", vec![""])
         .param("simulation_data", self.simulation_data.to_string());
@@ -64,25 +67,53 @@ impl User {
             println!("Error: {:#?}", e);
         };
 
-        id
+        Ok(id)
     }
 
-    pub async fn get_user(&self, graph: &Graph) {
+    pub async fn get_user(&self, graph: &Graph) -> Result<User, PulpError> {
         let q = Query::new("MATCH (u:User {id: $id})".to_string())
             .param("id", Uuid::new_v4().to_string());
 
-        let tx = graph.start_txn().await.unwrap();
+        let user = match graph.start_txn().await {
+            Ok(tx) => {
+                let user = match tx.execute(q).await {
+                    Ok(mut res) => {
+                        let row = res.next().await.unwrap().unwrap();
 
-        if let Err(e) = tx.run(q).await {
-            println!("Error: {:#?}", e);
-        }
+                        let user_node: Node = row.get("u").unwrap();
+                        let mut user = User::default();
 
-        if let Err(e) = tx.commit().await {
-            println!("Error: {:#?}", e);
-        }
+                        user.id = user_node.get::<String>("id").unwrap();
+                        user.simulation_data = user_node.get::<String>("simulation_data").unwrap();
+
+                        user
+                    }
+
+                    Err(e) => {
+                        println!("Error: {:#?}", e);
+
+                        User::default()
+                    }
+                };
+
+                if let Err(e) = tx.commit().await {
+                    println!("Error: {:#?}", e);
+                };
+
+                user
+            }
+
+            Err(e) => {
+                println!("Error: {:#?}", e);
+
+                User::default()
+            }
+        };
+
+        Ok(user)
     }
 
-    pub async fn get_all_users(graph: &Graph) -> Vec<User> {
+    pub async fn get_all_users(graph: &Graph) -> Result<Vec<User>, PulpError> {
         let q = Query::new("MATCH (u:User) RETURN u".to_string());
 
         let tx = graph.start_txn().await.unwrap();
@@ -101,7 +132,10 @@ impl User {
 
                     users.push(user);
                 }
-                println!("{:#?}", users);
+
+                if let Err(e) = tx.commit().await {
+                    println!("Error: {:#?}", e);
+                };
 
                 users
             }
@@ -113,15 +147,11 @@ impl User {
             }
         };
 
-        if let Err(e) = tx.commit().await {
-            println!("Error: {:#?}", e);
-        };
-
-        users
+        Ok(users)
     }
 
     // TODO: string vecs
-    pub async fn update_user(&self, graph: &Graph) {
+    pub async fn update_user(&self, graph: &Graph) -> Result<(), PulpError> {
         let q = Query::new(
             "MATCH (u:User {id: $id} SET u.debates = $debates, u.votes = $votes)".to_string(),
         )
@@ -129,55 +159,109 @@ impl User {
         .param("debates", "self.debates".to_string())
         .param("votes", "self.votes".to_string());
 
-        let tx = graph.start_txn().await.unwrap();
+        match graph.start_txn().await {
+            Ok(tx) => {
+                match tx.execute(q).await {
+                    Ok(_) => {}
 
-        if let Err(e) = tx.run(q).await {
-            println!("Error: {:#?}", e);
+                    Err(e) => {
+                        return Err(PulpError::SimulationError(SimulationError::Neo4jError(
+                            e.to_string(),
+                        )));
+                    }
+                };
+
+                if let Err(e) = tx.commit().await {
+                    return Err(PulpError::SimulationError(SimulationError::Neo4jError(
+                        e.to_string(),
+                    )));
+                };
+            }
+
+            Err(e) => {
+                return Err(PulpError::SimulationError(SimulationError::Neo4jError(
+                    e.to_string(),
+                )));
+            }
         }
 
-        if let Err(e) = tx.commit().await {
-            println!("Error: {:#?}", e);
-        }
+        Ok(())
     }
 
     /// Updates the debates the user has participated in.
     /// This function will overwrite whatever is currently in the debates field.
-    pub async fn update_user_debates(&self, graph: &Graph) {
+    pub async fn update_user_debates(&self, graph: &Graph) -> Result<(), PulpError> {
         let q = Query::new("MATCH (u:User {id: $id} SET u.debates = $debates)".to_string())
             .param("id", Uuid::new_v4().to_string())
             .param("debates", self.debates.clone());
 
-        let tx = graph.start_txn().await.unwrap();
+        match graph.start_txn().await {
+            Ok(tx) => {
+                match tx.execute(q).await {
+                    Ok(_) => {}
 
-        if let Err(e) = tx.run(q).await {
-            println!("Error: {:#?}", e);
+                    Err(e) => {
+                        return Err(PulpError::SimulationError(SimulationError::Neo4jError(
+                            e.to_string(),
+                        )));
+                    }
+                };
+
+                if let Err(e) = tx.commit().await {
+                    return Err(PulpError::SimulationError(SimulationError::Neo4jError(
+                        e.to_string(),
+                    )));
+                };
+            }
+
+            Err(e) => {
+                return Err(PulpError::SimulationError(SimulationError::Neo4jError(
+                    e.to_string(),
+                )));
+            }
         }
 
-        if let Err(e) = tx.commit().await {
-            println!("Error: {:#?}", e);
-        }
+        Ok(())
     }
 
     /// Updates the debates the user has participated in.
     /// This function will add to the current set of debates (in other words, it will not overwrite)
-    pub async fn add_user_debate(&self, graph: &Graph, debate_id: String) {
+    pub async fn add_user_debate(&self, graph: &Graph, debate_id: String) -> Result<(), PulpError> {
         let q =
             Query::new("MATCH (u:User {id: $id} SET u.debates = u.debates + $debate)".to_string())
                 .param("id", Uuid::new_v4().to_string())
                 .param("debates", debate_id);
 
-        let tx = graph.start_txn().await.unwrap();
+        match graph.start_txn().await {
+            Ok(tx) => {
+                match tx.execute(q).await {
+                    Ok(_) => {}
 
-        if let Err(e) = tx.run(q).await {
-            println!("Error: {:#?}", e);
+                    Err(e) => {
+                        return Err(PulpError::SimulationError(SimulationError::Neo4jError(
+                            e.to_string(),
+                        )));
+                    }
+                };
+
+                if let Err(e) = tx.commit().await {
+                    return Err(PulpError::SimulationError(SimulationError::Neo4jError(
+                        e.to_string(),
+                    )));
+                };
+            }
+
+            Err(e) => {
+                return Err(PulpError::SimulationError(SimulationError::Neo4jError(
+                    e.to_string(),
+                )));
+            }
         }
 
-        if let Err(e) = tx.commit().await {
-            println!("Error: {:#?}", e);
-        }
+        Ok(())
     }
 
-    pub async fn add_user_votes(&self, graph: Graph) {
+    pub async fn add_user_votes(&self, graph: Graph) -> Result<(), PulpError> {
         let mut vs: Vec<String> = Vec::new();
         for v in self.votes.clone() {
             vs.push(v.id)
@@ -187,29 +271,65 @@ impl User {
             .param("id", Uuid::new_v4().to_string())
             .param("votes", vs);
 
-        let tx = graph.start_txn().await.unwrap();
+        match graph.start_txn().await {
+            Ok(tx) => {
+                match tx.execute(q).await {
+                    Ok(_) => {}
 
-        if let Err(e) = tx.run(q).await {
-            println!("Error: {:#?}", e);
+                    Err(e) => {
+                        return Err(PulpError::SimulationError(SimulationError::Neo4jError(
+                            e.to_string(),
+                        )));
+                    }
+                };
+
+                if let Err(e) = tx.commit().await {
+                    return Err(PulpError::SimulationError(SimulationError::Neo4jError(
+                        e.to_string(),
+                    )));
+                };
+            }
+
+            Err(e) => {
+                return Err(PulpError::SimulationError(SimulationError::Neo4jError(
+                    e.to_string(),
+                )));
+            }
         }
 
-        if let Err(e) = tx.commit().await {
-            println!("Error: {:#?}", e);
-        }
+        Ok(())
     }
 
-    pub async fn delete_user(&self, graph: &Graph) {
+    pub async fn delete_user(&self, graph: &Graph) -> Result<(), PulpError> {
         let q = Query::new("MATCH (u:User {id: $id})".to_string())
             .param("id", Uuid::new_v4().to_string());
 
-        let tx = graph.start_txn().await.unwrap();
+        match graph.start_txn().await {
+            Ok(tx) => {
+                match tx.execute(q).await {
+                    Ok(_) => {}
 
-        if let Err(e) = tx.run(q).await {
-            println!("Error: {:#?}", e);
+                    Err(e) => {
+                        return Err(PulpError::SimulationError(SimulationError::Neo4jError(
+                            e.to_string(),
+                        )));
+                    }
+                };
+
+                if let Err(e) = tx.commit().await {
+                    return Err(PulpError::SimulationError(SimulationError::Neo4jError(
+                        e.to_string(),
+                    )));
+                };
+            }
+
+            Err(e) => {
+                return Err(PulpError::SimulationError(SimulationError::Neo4jError(
+                    e.to_string(),
+                )));
+            }
         }
 
-        if let Err(e) = tx.commit().await {
-            println!("Error: {:#?}", e);
-        }
+        Ok(())
     }
 }

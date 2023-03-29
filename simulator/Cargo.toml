@@ -6,6 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+eyre = { version = "0.6", default-features = false }
 pulpcalc_common = { path = "./../common" }
 pulpcalc_external = { path = "./../external" }
 neo4rs = { git = "https://github.com/neo4j-labs/neo4rs.git"}

@@ -4,7 +4,8 @@ debate_topics = ["Is america more divided than ever when it comes to politics?"]
 debate_categories = ["politics"]
 simulation_size = 150
 max_keynote_speakers = 50
-max_voters = 1000
+max_commenters = 10
+max_voters = 5
 max_references = 10
 
 [user_restrictions]

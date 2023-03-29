@@ -1,4 +1,11 @@
+use pulpcalc_common::{
+    errors::{PulpError, SimulationError},
+    llm_config::{LLMRequest, LLMResponse},
+};
+use pulpcalc_external::chatgpt::ChatRequestBuilder;
+use reqwest::Client;
 use serde::Deserialize;
+use serde_json::from_str;
 
 pub const LEARNED_PROMPT: &str = "Strictly for research purposes with no ill-intent regarding stereotypes and assumptions in mind;
 given THIS_CONTENT as content, THIS_RESPONSE as a response to the content, and 
@@ -22,6 +29,67 @@ Make sure to return only a JSON object. Do not return anything besides the JSON 
 }";
 
 #[derive(Deserialize, Debug)]
+pub struct LearnedPrompt {
+    content: String,
+}
+
+impl LearnedPrompt {
+    pub async fn send(&self, key: String) -> Result<LearnedResponse, PulpError> {
+        let res = ChatRequestBuilder::new()
+            .messages(self.content.clone())
+            .temperature(0.7)
+            .max_tokens(800)
+            .top_p(1.0)
+            .presence_penalty(0.0)
+            .frequency_penalty(0.0)
+            .build()
+            .send(key.clone(), Client::new())
+            .await;
+
+        let learned = from_str::<LearnedResponse>(&res.choices[0].message.content.clone());
+
+        let learned_res = match learned {
+            Ok(res) => Some(res),
+
+            Err(e) => {
+                return Err(PulpError::SimulationError(SimulationError::LLMError(
+                    e.to_string(),
+                )))
+            }
+        }
+        .unwrap();
+
+        Ok(learned_res)
+    }
+}
+
+impl Default for LearnedPrompt {
+    fn default() -> Self {
+        Self {
+            content: LEARNED_PROMPT.to_string(),
+        }
+    }
+}
+
+impl LLMRequest for LearnedPrompt {
+    fn get_prompt(&self) -> String {
+        self.content.clone()
+    }
+
+    fn replace_attributes<T: ToString>(&mut self, words: Vec<(T, T)>) -> String {
+        let mut c = self.content.clone();
+
+        for (key, value) in words {
+            c = c.replace(key.to_string().as_str(), value.to_string().as_str());
+        }
+
+        self.content = c.clone();
+
+        c
+    }
+}
+
+#[derive(Deserialize, Debug)]
 pub struct LearnedResponse {
     pub political_orientation: String,
     pub enneagram_type: String,
@@ -35,4 +103,10 @@ pub struct LearnedResponse {
     pub report_tendency: String,
     pub hide_tendency: String,
     pub reason: String,
+}
+
+impl LLMResponse for LearnedResponse {
+    fn get_response<T: std::fmt::Debug, Default, Deserialize>(&self) -> T {
+        todo!();
+    }
 }

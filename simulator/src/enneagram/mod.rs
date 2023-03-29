@@ -1,5 +1,7 @@
+use eyre::Result;
 use pulpcalc_common::{
     config::Config,
+    errors::{PulpError, SimulationError},
     models::{Debate, Reference, Response, User},
 };
 use pulpcalc_external::chatgpt::ChatRequestBuilder;
@@ -89,8 +91,12 @@ impl EnneagramSimulation {
         String::from("Enneagram")
     }
 
-    pub async fn run_simulation(&self, config: Config, mut debate: Debate) {
-        let debate_id = debate.create(&config.neo4j_graph).await;
+    pub async fn run_simulation(
+        &self,
+        config: Config,
+        mut debate: Debate,
+    ) -> Result<(), PulpError> {
+        let debate_id = debate.create(&config.neo4j_graph).await?;
         debate.id = debate_id;
 
         let mut users: Vec<EnneagramUser> = Vec::new();
@@ -135,7 +141,7 @@ impl EnneagramSimulation {
                 let mut user = EnneagramUser::default();
                 user.tendencies = t_res.clone().map_user_tendencies(i as i64);
 
-                let user_id = user.base_user.create(&config.neo4j_graph).await;
+                let user_id = user.base_user.create(&config.neo4j_graph).await?;
                 user.base_user.id = user_id;
 
                 debate
@@ -209,10 +215,10 @@ impl EnneagramSimulation {
 
             debate_response.score = debate_response
                 .calculate_content_attribute_score(key.clone())
-                .await
+                .await?
                 + debate_response.calculate_engagement_score();
 
-            let debate_response_id = debate_response.create(&config.neo4j_graph).await;
+            let debate_response_id = debate_response.create(&config.neo4j_graph).await?;
             debate_response.id = debate_response_id;
 
             let re = Regex::new(r"/(?:(?:https?|ftp|file):\\|www\\.|ftp\\.)(?:\\([-A-Z0-9+&@#\\%=~_|$?!:,.]*\\)|[-A-Z0-9+&@#\\%=~_|$?!:,.])*(?:\\([-A-Z0-9+&@#\\%=~_|$?!:,.]*\\)|[A-Z0-9+&@#\\%=~_|$])/igm").unwrap();
@@ -220,7 +226,7 @@ impl EnneagramSimulation {
                 let mut reference = Reference::default();
                 reference.content = link.as_str().to_string();
 
-                reference.create(&config.neo4j_graph).await;
+                reference.create(&config.neo4j_graph).await?;
 
                 debate_response
                     .clone()
@@ -228,16 +234,19 @@ impl EnneagramSimulation {
                     .await;
             }
 
-            generate_engagement(&config, debate_response.clone(), self.depth, users.clone()).await;
+            generate_engagement(&config, debate_response.clone(), self.depth, users.clone())
+                .await?;
 
             debate_response
                 .add_user_responded(&config.neo4j_graph, rand_user.base_user.to_owned())
-                .await;
+                .await?;
 
             debate_response
                 .add_debate_response_relationship(&config.neo4j_graph, debate.clone())
-                .await;
+                .await?;
         }
+
+        Ok(())
     }
 }
 
@@ -246,7 +255,7 @@ pub async fn generate_engagement(
     response: Response,
     mut depth: u64,
     users: Vec<EnneagramUser>,
-) {
+) -> Result<(), PulpError> {
     let key = config.open_ai_key.clone();
 
     let rint = (random::<f32>() * users.len() as f32).floor() as usize;
@@ -308,12 +317,12 @@ pub async fn generate_engagement(
 
     response_reply.score = response_reply
         .calculate_content_attribute_score(key.clone())
-        .await
+        .await?
         + response_reply.calculate_engagement_score();
 
     depth -= 1;
 
-    let response_reply_id = response_reply.create(&config.neo4j_graph).await;
+    let response_reply_id = response_reply.create(&config.neo4j_graph).await?;
     response_reply.id = response_reply_id;
 
     let re = Regex::new(r"/(?:(?:https?|ftp|file):\\|www\\.|ftp\\.)(?:\\([-A-Z0-9+&@#\\%=~_|$?!:,.]*\\)|[-A-Z0-9+&@#\\%=~_|$?!:,.])*(?:\\([-A-Z0-9+&@#\\%=~_|$?!:,.]*\\)|[A-Z0-9+&@#\\%=~_|$])/igm").unwrap();
@@ -321,21 +330,21 @@ pub async fn generate_engagement(
         let mut reference = Reference::default();
         reference.content = link.as_str().to_string();
 
-        reference.create(&config.neo4j_graph).await;
+        reference.create(&config.neo4j_graph).await?;
 
         response_reply
             .clone()
             .add_has_referecne(&config.neo4j_graph, reference)
-            .await;
+            .await?;
     }
 
     response_reply
         .add_user_responded(&config.neo4j_graph, rand_user.base_user.to_owned())
-        .await;
+        .await?;
 
     response
         .add_reply_relationship(&config.neo4j_graph, response_reply.clone())
-        .await;
+        .await?;
 
     // get reference
 
@@ -401,12 +410,12 @@ pub async fn generate_engagement(
 
         depth_response_reply.score = depth_response_reply
             .calculate_content_attribute_score(key.clone())
-            .await
+            .await?
             + depth_response_reply.calculate_engagement_score();
 
         depth -= 1;
 
-        let depth_response_reply_id = depth_response_reply.create(&config.neo4j_graph).await;
+        let depth_response_reply_id = depth_response_reply.create(&config.neo4j_graph).await?;
         depth_response_reply.id = depth_response_reply_id;
 
         let re = Regex::new(r"/(?:(?:https?|ftp|file):\\|www\\.|ftp\\.)(?:\\([-A-Z0-9+&@#\\%=~_|$?!:,.]*\\)|[-A-Z0-9+&@#\\%=~_|$?!:,.])*(?:\\([-A-Z0-9+&@#\\%=~_|$?!:,.]*\\)|[A-Z0-9+&@#\\%=~_|$])/igm").unwrap();
@@ -433,6 +442,8 @@ pub async fn generate_engagement(
 
         res = depth_response_reply;
     }
+
+    Ok(())
 }
 
 pub struct EnneagramSimulationBuilder {
