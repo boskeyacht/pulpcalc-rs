@@ -36,7 +36,9 @@ async fn main() -> Result<()> {
                     d.category = sim.category.clone();
 
                     let t = task::spawn(async move {
-                        sim.run_simulation(Config::init().await, d).await;
+                        if let Err(e) = sim.run_simulation(Config::init().await, d).await {
+                            println!("{}", e);
+                        }
                     });
 
                     ts.push(t);
@@ -62,7 +64,9 @@ async fn main() -> Result<()> {
                     d.category = sim.category.clone();
 
                     let t = task::spawn(async move {
-                        sim.run_simulation(Config::init().await, d).await;
+                        if let Err(e) = sim.run_simulation(Config::init().await, d).await {
+                            println!("{}", e);
+                        }
                     });
 
                     ts.push(t);
@@ -254,7 +258,9 @@ async fn main() -> Result<()> {
                 let mut ps = PersonasSimulation::default();
                 ps.debates = debates;
 
-                ps.run_simulation(cfg, personas_sim).await;
+                if let Err(e) = ps.run_simulation(cfg, personas_sim).await {
+                    println!("{}", e);
+                }
             }
         },
 

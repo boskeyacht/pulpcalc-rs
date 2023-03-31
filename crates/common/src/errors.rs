@@ -1,9 +1,11 @@
 use thiserror::Error;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Error)]
 pub enum PulpError {
+    #[error("{0}")]
     SimulationError(SimulationError),
 
+    #[error("{0}")]
     ApiError(ApiError),
 }
 

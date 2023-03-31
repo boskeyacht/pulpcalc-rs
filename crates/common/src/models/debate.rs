@@ -276,7 +276,7 @@ impl Debate {
     }
 
     pub async fn update_commenters(&self, graph: &Graph, count: i64) -> Result<(), PulpError> {
-        let q = Query::new("MATCH (d:Debate {id: $id} SET d.commenters = $commenters)".to_string())
+        let q = Query::new("MATCH (d:Debate {id: $id}) SET d.commenters = $commenters".to_string())
             .param("id", self.id.clone())
             .param("commenters", count);
 

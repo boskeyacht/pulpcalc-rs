@@ -1,9 +1,9 @@
 use crate::personas::{
     models::{Learned, PersonasUser},
     prompts::{
-        learned::LearnedPrompt,
-        response::{PersonaContentPrompt, PersonaContentPromptWithReference},
-        vote::VoteContentPrompt,
+        learned::{LearnedPrompt, LearnedResponse},
+        response::{ContentResponse, PersonaContentPrompt, PersonaContentPromptWithReference},
+        vote::{VoteContentPrompt, VoteResponse},
     },
 };
 use eyre::Result;
@@ -31,7 +31,19 @@ pub struct PersonasSimulation {
 }
 
 impl PersonasSimulation {
-    pub fn new() {}
+    pub fn new(
+        simulation_type: String,
+        simulation_size: i64,
+        simulation_duration: i64,
+        debates: Vec<Debate>,
+    ) -> Self {
+        Self {
+            simulation_type,
+            simulation_size,
+            simulation_duration,
+            debates,
+        }
+    }
 
     pub fn simulation_type(&self) -> String {
         self.simulation_type.clone()
@@ -83,7 +95,15 @@ impl PersonasSimulation {
                     ),
                 ]);
 
-                let content_res = prompt.send(config.open_ai_key.clone()).await?;
+                let content_res = match prompt.send(config.open_ai_key.clone()).await {
+                    Ok(content) => content,
+
+                    Err(e) => {
+                        println!("{:?}", e);
+
+                        ContentResponse::default()
+                    }
+                };
 
                 response.content = content_res.content;
                 response.ethos = content_res.ethos;
@@ -123,10 +143,10 @@ impl PersonasSimulation {
                 )
                 .await?;
 
-                response.score = response
-                    .calculate_content_attribute_score(config.open_ai_key.clone())
-                    .await?
-                    + response.calculate_engagement_score();
+                // response.score = response
+                //     .calculate_content_attribute_score(config.open_ai_key.clone())
+                //     .await?
+                //     + response.calculate_engagement_score();
 
                 response
                     .update_score(&config.neo4j_graph, response.score)
@@ -199,7 +219,15 @@ impl PersonasSimulation {
             ),
         ]);
 
-        let response_res = prompt.send(key.clone()).await?;
+        let response_res = match prompt.send(key.clone()).await {
+            Ok(content) => content,
+
+            Err(e) => {
+                println!("{:?}", e);
+
+                ContentResponse::default()
+            }
+        };
 
         let mut response_reply = Response::default();
         response_reply.content = response_res.content.clone();
@@ -208,10 +236,10 @@ impl PersonasSimulation {
         response_reply.pathos = response_res.pathos;
         response_reply.logos = response_res.logos;
 
-        response_reply.score = response_reply
-            .calculate_content_attribute_score(key.clone())
-            .await?
-            + response_reply.calculate_engagement_score();
+        // response_reply.score = response_reply
+        //     .calculate_content_attribute_score(key.clone())
+        //     .await?
+        //     + response_reply.calculate_engagement_score();
 
         response
             .update_score(&config.neo4j_graph, response.score)
@@ -266,7 +294,15 @@ impl PersonasSimulation {
                     ),
                 ]);
 
-                let response_res = prompt.send(key.clone()).await?;
+                let response_res = match prompt.send(key.clone()).await {
+                    Ok(content) => content,
+
+                    Err(e) => {
+                        println!("{:?}", e);
+
+                        ContentResponse::default()
+                    }
+                };
 
                 let mut depth_response_reply = Response::default();
                 depth_response_reply.content = response_res.content.clone();
@@ -276,10 +312,10 @@ impl PersonasSimulation {
                 depth_response_reply.pathos = response_res.pathos;
                 depth_response_reply.logos = response_res.logos;
 
-                depth_response_reply.score = depth_response_reply
-                    .calculate_content_attribute_score(key.clone())
-                    .await?
-                    + depth_response_reply.calculate_engagement_score();
+                // depth_response_reply.score = depth_response_reply
+                //     .calculate_content_attribute_score(key.clone())
+                //     .await?
+                //     + depth_response_reply.calculate_engagement_score();
 
                 depth -= 1;
 
@@ -362,7 +398,15 @@ impl PersonasSimulation {
                     ),
                 ]);
 
-                let response_res = prompt.send(key.clone()).await?;
+                let response_res = match prompt.send(key.clone()).await {
+                    Ok(content) => content,
+
+                    Err(e) => {
+                        println!("{:?}", e);
+
+                        ContentResponse::default()
+                    }
+                };
 
                 let mut depth_response_reply = Response::default();
                 depth_response_reply.content = response_res.content.clone();
@@ -371,10 +415,10 @@ impl PersonasSimulation {
                 depth_response_reply.pathos = response_res.pathos;
                 depth_response_reply.logos = response_res.logos;
 
-                depth_response_reply.score = depth_response_reply
-                    .calculate_content_attribute_score(key.clone())
-                    .await?
-                    + depth_response_reply.calculate_engagement_score();
+                // depth_response_reply.score = depth_response_reply
+                //     .calculate_content_attribute_score(key.clone())
+                //     .await?
+                //     + depth_response_reply.calculate_engagement_score();
 
                 depth -= 1;
 
@@ -431,7 +475,7 @@ impl PersonasSimulation {
         debate: &Debate,
     ) -> Result<(), PulpError> {
         let mut prompt = LearnedPrompt::default();
-        let c = prompt.replace_attributes(vec![
+        prompt.replace_attributes(vec![
             ("THIS_CONTENT".to_string(), response.content.clone()),
             ("THIS_RESPONSE".to_string(), reply.content.clone()),
             (
@@ -454,7 +498,15 @@ impl PersonasSimulation {
             ),
         ]);
 
-        let response_res = prompt.send(config.open_ai_key.clone()).await?;
+        let response_res = match prompt.send(config.open_ai_key.clone()).await {
+            Ok(content) => content,
+
+            Err(e) => {
+                println!("{:?}", e);
+
+                LearnedResponse::default()
+            }
+        };
 
         let mut learned = Learned::default();
         // TODO: add learned attributes
@@ -519,7 +571,15 @@ impl PersonasSimulation {
                 ),
             ]);
 
-            let vote_res = vote.send(config.open_ai_key.clone()).await?;
+            let vote_res = match vote.send(config.open_ai_key.clone()).await {
+                Ok(content) => content,
+
+                Err(e) => {
+                    println!("{:?}", e);
+
+                    VoteResponse::default()
+                }
+            };
 
             let mut votes = (0, 0, 0);
             let vote_type = VoteType::from(vote_res.vote.as_str());

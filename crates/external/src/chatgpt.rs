@@ -80,6 +80,7 @@ impl ChatRequest {
         }
     }
 
+    // TODO: handle error
     pub async fn send(&self, open_ai_key: String, client: Client) -> ChatResponse {
         let url = "https://api.openai.com/v1/chat/completions";
 

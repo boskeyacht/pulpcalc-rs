@@ -1,4 +1,4 @@
-use neo4rs::{Graph, Query};
+use neo4rs::{Graph, Node, Query};
 use pulpcalc_common::{
     errors::{PulpError, SimulationError},
     models::{Debate, Response, User},
@@ -337,40 +337,46 @@ impl PersonasUser {
                         let mut users: Vec<PersonasUser> = Vec::new();
 
                         while let Some(row) = res.next().await.unwrap() {
+                            let user_node: Node = row.get("pu").unwrap();
                             let mut user = PersonasUser::default();
 
+                            println!("{:?}", row);
+
                             let vt = (
-                                row.get::<i64>("valid_voting_tendency").unwrap(),
-                                row.get::<i64>("invalid_voting_tendency").unwrap(),
-                                row.get::<i64>("abstain_voting_tendency").unwrap(),
+                                user_node.get::<i64>("valid_voting_tendency").unwrap(),
+                                user_node.get::<i64>("invalid_voting_tendency").unwrap(),
+                                user_node.get::<i64>("abstain_voting_tendency").unwrap(),
                             );
 
-                            user.base_user.id = row.get("id").unwrap();
-                            user.network.network_size.followers = row.get("followers").unwrap();
-                            user.network.network_size.following = row.get("following").unwrap();
+                            user.base_user.id = user_node.get("id").unwrap();
+                            user.network.network_size.followers =
+                                user_node.get("followers").unwrap();
+                            user.network.network_size.following =
+                                user_node.get("following").unwrap();
                             user.network.network_activity.impressions =
-                                row.get("impressions").unwrap();
+                                user_node.get("impressions").unwrap();
                             user.network.network_activity.engagements =
-                                row.get("engagements").unwrap();
+                                user_node.get("engagements").unwrap();
                             // user.network.network_composition.network_personality = row.get("network_personality").unwrap();
-                            user.personality.personality_content.input = row.get("input").unwrap();
+                            user.personality.personality_content.input =
+                                user_node.get("input").unwrap();
                             user.personality.personality_content.output =
-                                row.get("output").unwrap();
+                                user_node.get("output").unwrap();
                             user.personality.personality_base.core_fear =
-                                row.get("core_fear").unwrap();
+                                user_node.get("core_fear").unwrap();
                             user.personality.personality_base.enneagram =
-                                row.get("enneagram").unwrap();
+                                user_node.get("enneagram").unwrap();
                             user.personality.personality_base.core_desire =
-                                row.get("core_desire").unwrap();
+                                user_node.get("core_desire").unwrap();
                             user.personality.personality_engagement.voting_tendency = vt;
                             user.personality.personality_engagement.hide_tendency =
-                                row.get("hide_tendency").unwrap();
+                                user_node.get("hide_tendency").unwrap();
                             user.personality.personality_engagement.report_tendency =
-                                row.get("report_tendency").unwrap();
+                                user_node.get("report_tendency").unwrap();
                             user.personality.personality_engagement.engagement_type =
-                                row.get("engagement_type").unwrap();
+                                user_node.get("engagement_type").unwrap();
                             user.knoweledge.knowledge_references =
-                                row.get("knowledge_references").unwrap();
+                                user_node.get("knowledge_references").unwrap();
 
                             users.push(user);
                         }

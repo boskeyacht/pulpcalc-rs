@@ -32,6 +32,12 @@ pub struct PersonaContentPrompt {
 }
 
 impl PersonaContentPrompt {
+    pub fn new(content: &str) -> Self {
+        PersonaContentPrompt {
+            content: content.to_string(),
+        }
+    }
+
     pub async fn send(&self, key: String) -> Result<ContentResponse, PulpError> {
         let res = ChatRequestBuilder::new()
             .messages(self.content.clone())
@@ -116,6 +122,12 @@ pub struct PersonaContentPromptWithReference {
 }
 
 impl PersonaContentPromptWithReference {
+    pub fn new(content: &str) -> Self {
+        PersonaContentPromptWithReference {
+            content: content.to_string(),
+        }
+    }
+
     pub async fn send(&self, key: String) -> Result<ContentResponse, PulpError> {
         let res = ChatRequestBuilder::new()
             .messages(self.content.clone())
@@ -198,6 +210,13 @@ pub struct PersonaContentPromptWithSupportedReferences {
 }
 
 impl PersonaContentPromptWithSupportedReferences {
+    pub fn new(content: &str, reference: &str) -> Self {
+        PersonaContentPromptWithSupportedReferences {
+            content: content.to_string(),
+            reference: reference.to_string(),
+        }
+    }
+
     pub async fn send(&self, key: String) -> Result<ContentResponse, PulpError> {
         let res = ChatRequestBuilder::new()
             .messages(self.content.clone())
@@ -281,6 +300,13 @@ pub struct PersonaContentPromptWithUnsupportedReferences {
 }
 
 impl PersonaContentPromptWithUnsupportedReferences {
+    pub fn new(content: &str, reference: &str) -> PersonaContentPromptWithUnsupportedReferences {
+        PersonaContentPromptWithUnsupportedReferences {
+            content: content.to_string(),
+            reference: reference.to_string(),
+        }
+    }
+
     pub async fn send(&self, key: String) -> Result<ContentResponse, PulpError> {
         let res = ChatRequestBuilder::new()
             .messages(self.content.clone())
@@ -348,6 +374,28 @@ pub struct ContentResponse {
     pub pathos: f64,
     pub logos: f64,
     pub reference: Option<String>,
+}
+
+impl ContentResponse {
+    pub fn new(
+        content: &str,
+        confidence: f32,
+        reason: &str,
+        ethos: f64,
+        pathos: f64,
+        logos: f64,
+        reference: Option<String>,
+    ) -> Self {
+        Self {
+            content: content.to_string(),
+            confidence,
+            reason: reason.to_string(),
+            ethos,
+            pathos,
+            logos,
+            reference,
+        }
+    }
 }
 
 impl LLMResponse for ContentResponse {

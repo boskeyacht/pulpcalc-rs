@@ -64,8 +64,9 @@ impl Config {
             Some(key) => key,
             None => {
                 println!("OPENAI_KEY not found");
+                // std::process::exit(1);
 
-                std::process::exit(1);
+                String::from("")
             }
         };
 
@@ -80,6 +81,11 @@ impl Config {
         config.neo_user = env::var("NEO_USER").ok();
         config.neo_password = env::var("NEO_PASSWORD").ok();
         config.open_ai_key = open_ai;
+
+        config.neo_endpoint = Some("localhost:7687".to_string());
+        config.neo_user = Some("neo4j".to_string());
+        config.neo_password = Some("123".to_string());
+        config.open_ai_key = "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".to_string();
 
         let g = Arc::new(
             Graph::new(

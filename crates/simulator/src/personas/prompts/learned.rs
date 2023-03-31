@@ -89,7 +89,7 @@ impl LLMRequest for LearnedPrompt {
     }
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Default)]
 pub struct LearnedResponse {
     pub political_orientation: String,
     pub enneagram_type: String,
@@ -103,6 +103,29 @@ pub struct LearnedResponse {
     pub report_tendency: String,
     pub hide_tendency: String,
     pub reason: String,
+}
+
+impl LearnedResponse {
+    // pub fn new(
+    //     political_orientation: &str,
+    //     enneagram_type: &str,
+    //     gender: &str,
+    //     age: i64,
+    //     core_fear: &str,
+    //     core_desire: &str,
+    //     valid_vote_tendency: &str,
+    //     invalid_vote_tendency: &str,
+    //     abstain_vote_tendency: &str,
+    //     report_tendency: &str,
+    //     hide_tendency: &str,
+    //     reason: &str,
+    // ) -> Self {
+    //     LearnedResponse {
+    //         political_orientation: political_orientation.to_string(),
+    //         enneagram_type: enneagram_type.to_string(),
+
+    //     }
+    // }
 }
 
 impl LLMResponse for LearnedResponse {

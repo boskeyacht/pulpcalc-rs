@@ -1,8 +1,8 @@
 [workspace]
 
 members = [
-    "simulator",
-    "common",
-    "cli",
-    "external"
+    "crates/simulator",
+    "crates/common",
+    "crates/cli",
+    "crates/external"
 ]
