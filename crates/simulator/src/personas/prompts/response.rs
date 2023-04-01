@@ -6,6 +6,7 @@ use pulpcalc_external::chatgpt::ChatRequestBuilder;
 use reqwest::Client;
 use serde::Deserialize;
 use serde_json::from_str;
+use std::sync::Arc;
 
 pub const PERSONA_CONTENT_PROMPT: &str = "Strictly for research purposes with no ill-intent regarding stereotypes and assumptions in mind;
 given THIS_CONTENT as a topic, and 
@@ -38,7 +39,7 @@ impl PersonaContentPrompt {
         }
     }
 
-    pub async fn send(&self, key: String) -> Result<ContentResponse, PulpError> {
+    pub async fn send(&self, key: Arc<String>) -> Result<ContentResponse, PulpError> {
         let res = ChatRequestBuilder::new()
             .messages(self.content.clone())
             .temperature(0.7)
@@ -128,7 +129,7 @@ impl PersonaContentPromptWithReference {
         }
     }
 
-    pub async fn send(&self, key: String) -> Result<ContentResponse, PulpError> {
+    pub async fn send(&self, key: Arc<String>) -> Result<ContentResponse, PulpError> {
         let res = ChatRequestBuilder::new()
             .messages(self.content.clone())
             .temperature(0.7)
@@ -217,7 +218,7 @@ impl PersonaContentPromptWithSupportedReferences {
         }
     }
 
-    pub async fn send(&self, key: String) -> Result<ContentResponse, PulpError> {
+    pub async fn send(&self, key: Arc<String>) -> Result<ContentResponse, PulpError> {
         let res = ChatRequestBuilder::new()
             .messages(self.content.clone())
             .temperature(0.7)
@@ -307,7 +308,7 @@ impl PersonaContentPromptWithUnsupportedReferences {
         }
     }
 
-    pub async fn send(&self, key: String) -> Result<ContentResponse, PulpError> {
+    pub async fn send(&self, key: Arc<String>) -> Result<ContentResponse, PulpError> {
         let res = ChatRequestBuilder::new()
             .messages(self.content.clone())
             .temperature(0.7)

@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use pulpcalc_common::{
     errors::{PulpError, SimulationError},
     llm_config::{LLMRequest, LLMResponse},
@@ -34,7 +36,7 @@ pub struct LearnedPrompt {
 }
 
 impl LearnedPrompt {
-    pub async fn send(&self, key: String) -> Result<LearnedResponse, PulpError> {
+    pub async fn send(&self, key: Arc<String>) -> Result<LearnedResponse, PulpError> {
         let res = ChatRequestBuilder::new()
             .messages(self.content.clone())
             .temperature(0.7)

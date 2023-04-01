@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
@@ -81,7 +83,7 @@ impl ChatRequest {
     }
 
     // TODO: handle error
-    pub async fn send(&self, open_ai_key: String, client: Client) -> ChatResponse {
+    pub async fn send(&self, open_ai_key: Arc<String>, client: Client) -> ChatResponse {
         let url = "https://api.openai.com/v1/chat/completions";
 
         let res = client

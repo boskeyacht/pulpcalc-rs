@@ -3,11 +3,11 @@ use super::reference::Reference;
 use super::user::User;
 use super::{attributes::Attributes, Debate};
 use crate::errors::{PulpError, SimulationError};
+use crate::llm_config::LLMRequest;
 use crate::models::gpt_scoring::*;
 use neo4rs::{Graph, Query};
-use pulpcalc_external::chatgpt::ChatRequestBuilder;
-use reqwest::Client;
-use serde_json::from_str;
+use std::sync::Arc;
+use tokio::{join, task, task::JoinError};
 use uuid::Uuid;
 
 #[derive(Debug, Default, Clone)]
@@ -103,11 +103,12 @@ impl Response {
         0
     }
 
+    // TODO: if let some here
     #[allow(unused_mut)]
     #[allow(unused_assignments)]
     pub async fn calculate_content_attribute_score(
         &mut self,
-        open_ai_key: String,
+        open_ai_key: Arc<String>,
     ) -> Result<i64, PulpError> {
         let mut init_score: i64 = self.score;
         let mut relevance = 0.0;
@@ -117,123 +118,121 @@ impl Response {
         // let mut syntax_and_grammar = 0;
         // let mut spelling = 0;
         let mut word_count: i64 = 0;
-        let mut _mastery_vocabulary: i64 = 0;
+        let mut mastery_vocabulary: i64 = 0;
 
-        let mut relevance_prompt = RELEVANCE_PROMPT.to_string();
-        relevance_prompt =
-            relevance_prompt.replace("THIS_TOPIC", &self.topic_of_response.to_string());
-        relevance_prompt = relevance_prompt.replace("THIS_CONTENT", &self.content.to_string());
+        let mut relevance_prompt = RelevanceContentPrompt::default();
+        relevance_prompt.replace_attributes(vec![
+            ("THIS_TOPIC".to_string(), self.topic_of_response.clone()),
+            ("THIS_CONTENT".to_string(), self.content.clone()),
+        ]);
 
-        let relevance_chat_res = ChatRequestBuilder::new()
-            .messages(relevance_prompt)
-            .temperature(0.7)
-            .max_tokens(850)
-            .top_p(1.0)
-            .presence_penalty(0.0)
-            .frequency_penalty(0.0)
-            .build()
-            .send(open_ai_key.clone(), Client::new())
-            .await;
+        let mut soundness_prompt = SoundnessContentPrompt::default();
+        soundness_prompt.replace_attributes(vec![
+            ("THIS_TOPIC".to_string(), self.topic_of_response.clone()),
+            ("THIS_CONTENT".to_string(), self.content.clone()),
+        ]);
 
-        let relevance_res =
-            from_str::<RelevanceResponse>(&relevance_chat_res.choices[0].message.content.clone());
+        let mut mastery_prompt = MasteryVocabContentPrompt::default();
+        mastery_prompt.replace_attributes(vec![
+            ("THIS_TOPIC".to_string(), self.topic_of_response.clone()),
+            ("THIS_CONTENT".to_string(), self.content.clone()),
+        ]);
 
-        let rel = match relevance_res {
-            Ok(res) => Some(res),
+        let (rel, mastery, sound): (
+            Result<RelevanceResponse, JoinError>,
+            Result<MasteryVocabResponse, JoinError>,
+            Result<SoundnessResponse, JoinError>,
+        ) = join!(
+            task::spawn({
+                let key = open_ai_key.clone();
 
-            Err(e) => {
-                return Err(PulpError::SimulationError(SimulationError::SimError(
-                    e.to_string(),
-                )));
-            }
-        };
+                async move {
+                    match relevance_prompt.clone().send(key).await {
+                        Ok(rel) => {
+                            println!("rel: {:?}", rel);
+
+                            rel
+                        }
+
+                        Err(e) => {
+                            println!("err: {:?}", e);
+
+                            RelevanceResponse::default()
+                        }
+                    }
+                }
+            }),
+            task::spawn({
+                let key = open_ai_key.clone();
+
+                async move {
+                    match mastery_prompt.clone().send(key.clone()).await {
+                        Ok(mast) => {
+                            println!("mast: {:?}", mast);
+
+                            mast
+                        }
+
+                        Err(e) => {
+                            println!("err: {:?}", e);
+
+                            MasteryVocabResponse::default()
+                        }
+                    }
+                }
+            }),
+            task::spawn({
+                let key = open_ai_key.clone();
+
+                async move {
+                    match soundness_prompt.clone().send(key).await {
+                        Ok(sound) => {
+                            println!("sound: {:?}", sound);
+
+                            sound
+                        }
+
+                        Err(e) => {
+                            println!("err: {:?}", e);
+
+                            SoundnessResponse::default()
+                        }
+                    }
+                }
+            })
+        );
 
         relevance = rel.unwrap().relevance;
-
-        println!("relevance: {:?}", relevance);
-
-        let mut soundness_prompt = SOUNDNESS_PROMPT.to_string();
-        soundness_prompt =
-            soundness_prompt.replace("THIS_TOPIC", &self.topic_of_response.to_string());
-        soundness_prompt = soundness_prompt.replace("THIS_CONTENT", &self.content.to_string());
-
-        let soundness_chat_res = ChatRequestBuilder::new()
-            .messages(soundness_prompt)
-            .temperature(0.7)
-            .max_tokens(850)
-            .top_p(1.0)
-            .presence_penalty(0.0)
-            .frequency_penalty(0.0)
-            .build()
-            .send(open_ai_key.clone(), Client::new())
-            .await;
-
-        let soundness_res =
-            from_str::<SoundnessResponse>(&soundness_chat_res.choices[0].message.content.clone());
-
-        let snd = match soundness_res {
-            Ok(res) => Some(res),
-
-            Err(e) => {
-                return Err(PulpError::SimulationError(SimulationError::SimError(
-                    e.to_string(),
-                )));
-            }
-        };
-
-        soundness = snd.unwrap().soundness;
-
-        println!("soundness: {:?}", soundness);
-
-        let mut mastery_prompt = MASTERY_VOCAB_PROMPT.to_string();
-        mastery_prompt = mastery_prompt.replace("THIS_TOPIC", &self.topic_of_response.to_string());
-        mastery_prompt = mastery_prompt.replace("THIS_CONTENT", &self.content.to_string());
-
-        let mastery_chat_res = ChatRequestBuilder::new()
-            .messages(mastery_prompt)
-            .temperature(0.7)
-            .max_tokens(850)
-            .top_p(1.0)
-            .presence_penalty(0.0)
-            .frequency_penalty(0.0)
-            .build()
-            .send(open_ai_key, Client::new())
-            .await;
-
-        let mastery_res =
-            from_str::<MasteryVocabResponse>(&mastery_chat_res.choices[0].message.content.clone());
-
-        let mst = match mastery_res {
-            Ok(res) => Some(res),
-
-            Err(e) => {
-                return Err(PulpError::SimulationError(SimulationError::SimError(
-                    e.to_string(),
-                )));
-            }
-        };
-
-        if let Some(mast) = mst {
-            let mastery_vocabulary = if let Some(wrds) = mast.mastery_words.clone() {
-                wrds.len() as i64
-            } else {
-                0
-            };
-
-            word_count = self.content.split_whitespace().count() as i64;
-
-            init_score +=
-                (mastery_vocabulary + self.invalid_vote_count) * (relevance + soundness) as i64;
+        soundness = sound.unwrap().soundness;
+        mastery_vocabulary = if let Some(words) = mastery.unwrap().mastery_words {
+            let l = words.len() as i64;
 
             self.attributes = Attributes::new(
                 relevance,
                 soundness,
                 references,
-                word_count,
-                mast.mastery_words,
+                self.content.split_whitespace().count() as i64,
+                words,
             );
+
+            l
         } else {
-        }
+            self.attributes = Attributes::new(
+                relevance,
+                soundness,
+                references,
+                self.content.split_whitespace().count() as i64,
+                vec!["".to_string()],
+            );
+
+            0
+        };
+
+        println!("relevance: {:?}", relevance);
+        println!("soundness: {:?}", soundness);
+
+        init_score +=
+            (mastery_vocabulary + self.invalid_vote_count) * (relevance + soundness) as i64;
 
         println!("init_score: {:#?}", init_score);
 

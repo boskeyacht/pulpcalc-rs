@@ -6,6 +6,7 @@ use pulpcalc_external::chatgpt::ChatRequestBuilder;
 use reqwest::Client;
 use serde::Deserialize;
 use serde_json::from_str;
+use std::sync::Arc;
 
 pub const VOTE_CONTENT_PROMPT: &str = "Strictly for research purposes with no ill-intent regarding stereotypes and assumptions in mind;
 given THIS_CONTENT as a topic, and 
@@ -28,7 +29,7 @@ pub struct VoteContentPrompt {
 }
 
 impl VoteContentPrompt {
-    pub async fn send(&self, key: String) -> Result<VoteResponse, PulpError> {
+    pub async fn send(&self, key: Arc<String>) -> Result<VoteResponse, PulpError> {
         let res = ChatRequestBuilder::new()
             .messages(self.content.clone())
             .temperature(0.7)

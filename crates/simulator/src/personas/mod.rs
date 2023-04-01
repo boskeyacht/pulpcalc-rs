@@ -7,6 +7,7 @@ use crate::personas::{
     },
 };
 use eyre::Result;
+use futures::future::join_all;
 use pulpcalc_common::{
     config::Config,
     errors::PulpError,
@@ -15,6 +16,7 @@ use pulpcalc_common::{
 };
 use rand::prelude::*;
 use serde::Deserialize;
+use tokio::task::{self, JoinHandle};
 
 pub mod models;
 mod prompts;
@@ -124,29 +126,29 @@ impl PersonasSimulation {
                     .await?;
 
                 Self::generate_votes(
-                    &config,
-                    &response,
-                    &debate,
+                    config.clone(),
+                    response.clone(),
+                    debate.clone(),
                     personas_config.max_commenters.unwrap(),
-                    &users,
+                    users.clone(),
                 )
                 .await?;
 
                 Self::generate_engagement(
-                    &config,
-                    &personas_config,
+                    config.clone(),
+                    personas_config.clone(),
                     response.clone(),
-                    &users,
+                    users.clone(),
                     0,
                     3,
                     &mut debate,
                 )
                 .await?;
 
-                // response.score = response
-                //     .calculate_content_attribute_score(config.open_ai_key.clone())
-                //     .await?
-                //     + response.calculate_engagement_score();
+                response.score = response
+                    .calculate_content_attribute_score(config.open_ai_key.clone())
+                    .await?
+                    + response.calculate_engagement_score();
 
                 response
                     .update_score(&config.neo4j_graph, response.score)
@@ -183,10 +185,10 @@ impl PersonasSimulation {
     /// Generates child responses to a given piece of content, uses user attributes to generate as "real"
     /// a response as possible
     pub async fn generate_engagement(
-        config: &Config,
-        pcfg: &PersonasSimulationConfig,
+        config: Config,
+        pcfg: PersonasSimulationConfig,
         response: Response,
-        users: &Vec<PersonasUser>,
+        users: Vec<PersonasUser>,
         mut width: i64,
         mut depth: i64,
         debate: &mut Debate,
@@ -236,10 +238,10 @@ impl PersonasSimulation {
         response_reply.pathos = response_res.pathos;
         response_reply.logos = response_res.logos;
 
-        // response_reply.score = response_reply
-        //     .calculate_content_attribute_score(key.clone())
-        //     .await?
-        //     + response_reply.calculate_engagement_score();
+        response_reply.score = response_reply
+            .calculate_content_attribute_score(key.clone())
+            .await?
+            + response_reply.calculate_engagement_score();
 
         response
             .update_score(&config.neo4j_graph, response.score)
@@ -265,204 +267,267 @@ impl PersonasSimulation {
 
         // get reference
 
+        let mut handles: Vec<JoinHandle<()>> = Vec::new();
         let mut res: Response = response_reply;
         while depth > 0 {
-            let rint = (random::<f32>() * users.len() as f32).floor() as usize;
-            let rand_user = &users[rint];
+            let rint = (random::<f32>() * users.clone().len() as f32).floor() as usize;
+            let rand_user = users[rint].clone();
 
+            // TODO: references
             if pcfg.max_voters > Some(0) {
-                let mut prompt = PersonaContentPrompt::default();
-                prompt.replace_attributes(vec![
-                    ("THIS_CONTENT".to_string(), response.content.clone()),
-                    (
-                        "POLITICAL_ORIENTATION".to_string(),
-                        rand_user.political_orientation.to_string(),
-                    ),
-                    (
-                        "ENNEAGRAM_TYPE".to_string(),
-                        rand_user.personality.personality_base.enneagram.to_string(),
-                    ),
-                    ("GENDER".to_string(), rand_user.gender.to_string()),
-                    ("AGE".to_string(), rand_user.age.to_string()),
-                    (
-                        "CORE_FEAR".to_string(),
-                        rand_user.personality.personality_base.core_fear.clone(),
-                    ),
-                    (
-                        "CORE_DESIRE".to_string(),
-                        rand_user.personality.personality_base.core_desire.clone(),
-                    ),
-                ]);
+                let dh = task::spawn({
+                    let config = config.clone();
+                    let users = users.clone();
+                    let response = response.clone();
+                    let mut debate = debate.clone();
+                    let key = key.clone();
+                    let mut res = res.clone();
 
-                let response_res = match prompt.send(key.clone()).await {
-                    Ok(content) => content,
+                    async move {
+                        let mut prompt = PersonaContentPrompt::default();
+                        prompt.replace_attributes(vec![
+                            ("THIS_CONTENT".to_string(), response.content.clone()),
+                            (
+                                "POLITICAL_ORIENTATION".to_string(),
+                                rand_user.political_orientation.to_string(),
+                            ),
+                            (
+                                "ENNEAGRAM_TYPE".to_string(),
+                                rand_user.personality.personality_base.enneagram.to_string(),
+                            ),
+                            ("GENDER".to_string(), rand_user.gender.to_string()),
+                            ("AGE".to_string(), rand_user.age.to_string()),
+                            (
+                                "CORE_FEAR".to_string(),
+                                rand_user.personality.personality_base.core_fear.clone(),
+                            ),
+                            (
+                                "CORE_DESIRE".to_string(),
+                                rand_user.personality.personality_base.core_desire.clone(),
+                            ),
+                        ]);
 
-                    Err(e) => {
-                        println!("{:?}", e);
+                        let response_res = match prompt.send(key.clone()).await {
+                            Ok(content) => content,
 
-                        ContentResponse::default()
+                            Err(e) => {
+                                println!("{:?}", e);
+
+                                ContentResponse::default()
+                            }
+                        };
+
+                        let mut depth_response_reply = Response::default();
+                        depth_response_reply.content = response_res.content.clone();
+                        depth_response_reply.confidence = response_res.confidence as f64;
+                        depth_response_reply.references =
+                            vec![response_res.reference.unwrap_or_default()];
+                        depth_response_reply.ethos = response_res.ethos;
+                        depth_response_reply.pathos = response_res.pathos;
+                        depth_response_reply.logos = response_res.logos;
+
+                        depth_response_reply.score = depth_response_reply
+                            .calculate_content_attribute_score(key.clone())
+                            .await
+                            .expect("msg")
+                            + depth_response_reply.calculate_engagement_score();
+
+                        depth -= 1;
+
+                        let depth_response_reply_id =
+                            depth_response_reply.create(&config.neo4j_graph).await;
+                        if let Ok(did) = depth_response_reply_id {
+                            depth_response_reply.id = did;
+                        }
+
+                        rand_user
+                            .add_user_responded(&config.neo4j_graph, depth_response_reply.clone())
+                            .await;
+                        res.add_reply_relationship(
+                            &config.neo4j_graph,
+                            depth_response_reply.clone(),
+                        )
+                        .await;
+
+                        Self::get_learned_attributes(
+                            &config,
+                            &rand_user,
+                            &res,
+                            &depth_response_reply,
+                            &debate,
+                        )
+                        .await;
+
+                        debate.responses += 1;
+
+                        depth_response_reply
+                            .update_ethos(&config.neo4j_graph, depth_response_reply.ethos)
+                            .await;
+                        depth_response_reply
+                            .update_logos(&config.neo4j_graph, depth_response_reply.logos)
+                            .await;
+                        depth_response_reply
+                            .update_pathos(&config.neo4j_graph, depth_response_reply.pathos)
+                            .await;
+
+                        for reference in depth_response_reply.references.clone() {
+                            let mut reff = Reference::default();
+
+                            reff.content = reference.clone();
+                            reff.internal = false;
+
+                            let reff_id = reff.create(&config.neo4j_graph).await;
+                            if let Ok(rid) = reff_id {
+                                reff.id = rid;
+                            }
+
+                            reff.add_response_referenced_relationship(
+                                &config.neo4j_graph,
+                                depth_response_reply.clone(),
+                            )
+                            .await;
+                        }
+
+                        depth_response_reply
+                            .update_score(&config.neo4j_graph, response.score)
+                            .await;
+
+                        rand_user
+                            .add_user_responded(&config.neo4j_graph, depth_response_reply.clone())
+                            .await;
+
+                        println!("Reference Response: {:#?}", depth_response_reply.clone());
+
+                        res.add_reply_relationship(
+                            &config.neo4j_graph,
+                            depth_response_reply.clone(),
+                        )
+                        .await;
+
+                        Self::get_learned_attributes(
+                            &config,
+                            &rand_user,
+                            &res,
+                            &depth_response_reply,
+                            &debate,
+                        )
+                        .await;
+
+                        res = depth_response_reply;
                     }
-                };
+                });
 
-                let mut depth_response_reply = Response::default();
-                depth_response_reply.content = response_res.content.clone();
-                depth_response_reply.confidence = response_res.confidence as f64;
-                depth_response_reply.references = vec![response_res.reference.unwrap_or_default()];
-                depth_response_reply.ethos = response_res.ethos;
-                depth_response_reply.pathos = response_res.pathos;
-                depth_response_reply.logos = response_res.logos;
-
-                // depth_response_reply.score = depth_response_reply
-                //     .calculate_content_attribute_score(key.clone())
-                //     .await?
-                //     + depth_response_reply.calculate_engagement_score();
-
-                depth -= 1;
-
-                let depth_response_reply_id =
-                    depth_response_reply.create(&config.neo4j_graph).await?;
-                depth_response_reply.id = depth_response_reply_id;
-
-                debate.responses += 1;
-
-                depth_response_reply
-                    .update_ethos(&config.neo4j_graph, depth_response_reply.ethos)
-                    .await?;
-                depth_response_reply
-                    .update_logos(&config.neo4j_graph, depth_response_reply.logos)
-                    .await?;
-                depth_response_reply
-                    .update_pathos(&config.neo4j_graph, depth_response_reply.pathos)
-                    .await?;
-
-                for reference in depth_response_reply.references.clone() {
-                    let mut reff = Reference::default();
-
-                    reff.content = reference.clone();
-                    reff.internal = false;
-
-                    let reff_id = reff.create(&config.neo4j_graph).await?;
-                    reff.id = reff_id;
-
-                    reff.add_response_referenced_relationship(
-                        &config.neo4j_graph,
-                        depth_response_reply.clone(),
-                    )
-                    .await?;
-                }
-
-                depth_response_reply
-                    .update_score(&config.neo4j_graph, response.score)
-                    .await?;
-
-                rand_user
-                    .add_user_responded(&config.neo4j_graph, depth_response_reply.clone())
-                    .await?;
-
-                println!("Reference Response: {:#?}", depth_response_reply.clone());
-
-                res.add_reply_relationship(&config.neo4j_graph, depth_response_reply.clone())
-                    .await?;
-
-                Self::get_learned_attributes(
-                    &config,
-                    rand_user,
-                    &res,
-                    &depth_response_reply,
-                    debate,
-                )
-                .await?;
-
-                res = depth_response_reply;
+                handles.push(dh);
             } else {
-                let mut prompt = PersonaContentPrompt::default();
-                prompt.replace_attributes(vec![
-                    ("THIS_CONTENT".to_string(), response.content.clone()),
-                    (
-                        "POLITICAL_ORIENTATION".to_string(),
-                        rand_user.political_orientation.to_string(),
-                    ),
-                    (
-                        "ENNEAGRAM_TYPE".to_string(),
-                        rand_user.personality.personality_base.enneagram.to_string(),
-                    ),
-                    ("GENDER".to_string(), rand_user.gender.to_string()),
-                    ("AGE".to_string(), rand_user.age.to_string()),
-                    (
-                        "CORE_FEAR".to_string(),
-                        rand_user.personality.personality_base.core_fear.clone(),
-                    ),
-                    (
-                        "CORE_DESIRE".to_string(),
-                        rand_user.personality.personality_base.core_desire.clone(),
-                    ),
-                ]);
+                let dh = task::spawn({
+                    let config = config.clone();
+                    let users = users.clone();
+                    let response = response.clone();
+                    let mut debate = debate.clone();
+                    let key = key.clone();
+                    let mut res = res.clone();
 
-                let response_res = match prompt.send(key.clone()).await {
-                    Ok(content) => content,
+                    async move {
+                        let mut prompt = PersonaContentPrompt::default();
+                        prompt.replace_attributes(vec![
+                            ("THIS_CONTENT".to_string(), response.content.clone()),
+                            (
+                                "POLITICAL_ORIENTATION".to_string(),
+                                rand_user.political_orientation.to_string(),
+                            ),
+                            (
+                                "ENNEAGRAM_TYPE".to_string(),
+                                rand_user.personality.personality_base.enneagram.to_string(),
+                            ),
+                            ("GENDER".to_string(), rand_user.gender.to_string()),
+                            ("AGE".to_string(), rand_user.age.to_string()),
+                            (
+                                "CORE_FEAR".to_string(),
+                                rand_user.personality.personality_base.core_fear.clone(),
+                            ),
+                            (
+                                "CORE_DESIRE".to_string(),
+                                rand_user.personality.personality_base.core_desire.clone(),
+                            ),
+                        ]);
 
-                    Err(e) => {
-                        println!("{:?}", e);
+                        let response_res = match prompt.send(key.clone()).await {
+                            Ok(content) => content,
 
-                        ContentResponse::default()
+                            Err(e) => {
+                                println!("{:?}", e);
+
+                                ContentResponse::default()
+                            }
+                        };
+
+                        let mut depth_response_reply = Response::default();
+                        depth_response_reply.content = response_res.content.clone();
+                        depth_response_reply.confidence = response_res.confidence as f64;
+                        depth_response_reply.ethos = response_res.ethos;
+                        depth_response_reply.pathos = response_res.pathos;
+                        depth_response_reply.logos = response_res.logos;
+
+                        depth_response_reply.score = depth_response_reply
+                            .calculate_content_attribute_score(key.clone())
+                            .await
+                            .expect("msg")
+                            + depth_response_reply.calculate_engagement_score();
+
+                        depth -= 1;
+
+                        depth_response_reply
+                            .update_ethos(&config.neo4j_graph, depth_response_reply.ethos)
+                            .await;
+                        depth_response_reply
+                            .update_logos(&config.neo4j_graph, depth_response_reply.logos)
+                            .await;
+                        depth_response_reply
+                            .update_pathos(&config.neo4j_graph, depth_response_reply.pathos)
+                            .await;
+
+                        if let Ok(depth_response_reply_id) =
+                            depth_response_reply.create(&config.neo4j_graph).await
+                        {
+                            depth_response_reply.id = depth_response_reply_id;
+                        }
+
+                        debate.responses += 1;
+
+                        depth_response_reply
+                            .update_score(&config.neo4j_graph, response.score)
+                            .await;
+
+                        rand_user
+                            .add_user_responded(&config.neo4j_graph, depth_response_reply.clone())
+                            .await;
+
+                        println!("Response: {:?}", depth_response_reply.clone());
+
+                        res.add_reply_relationship(
+                            &config.neo4j_graph,
+                            depth_response_reply.clone(),
+                        )
+                        .await;
+
+                        Self::get_learned_attributes(
+                            &config,
+                            &rand_user,
+                            &res,
+                            &depth_response_reply,
+                            &debate,
+                        )
+                        .await;
+
+                        res = depth_response_reply;
                     }
-                };
+                });
 
-                let mut depth_response_reply = Response::default();
-                depth_response_reply.content = response_res.content.clone();
-                depth_response_reply.confidence = response_res.confidence as f64;
-                depth_response_reply.ethos = response_res.ethos;
-                depth_response_reply.pathos = response_res.pathos;
-                depth_response_reply.logos = response_res.logos;
-
-                // depth_response_reply.score = depth_response_reply
-                //     .calculate_content_attribute_score(key.clone())
-                //     .await?
-                //     + depth_response_reply.calculate_engagement_score();
-
-                depth -= 1;
-
-                depth_response_reply
-                    .update_ethos(&config.neo4j_graph, depth_response_reply.ethos)
-                    .await?;
-                depth_response_reply
-                    .update_logos(&config.neo4j_graph, depth_response_reply.logos)
-                    .await?;
-                depth_response_reply
-                    .update_pathos(&config.neo4j_graph, depth_response_reply.pathos)
-                    .await?;
-
-                let depth_response_reply_id =
-                    depth_response_reply.create(&config.neo4j_graph).await?;
-                depth_response_reply.id = depth_response_reply_id;
-
-                debate.responses += 1;
-
-                depth_response_reply
-                    .update_score(&config.neo4j_graph, response.score)
-                    .await?;
-
-                rand_user
-                    .add_user_responded(&config.neo4j_graph, depth_response_reply.clone())
-                    .await?;
-
-                println!("Response: {:?}", depth_response_reply.clone());
-
-                res.add_reply_relationship(&config.neo4j_graph, depth_response_reply.clone())
-                    .await?;
-
-                Self::get_learned_attributes(
-                    &config,
-                    rand_user,
-                    &res,
-                    &depth_response_reply,
-                    debate,
-                )
-                .await?;
-
-                res = depth_response_reply;
+                handles.push(dh);
             }
         }
+
+        join_all(handles).await;
 
         Ok(())
     }
@@ -534,11 +599,11 @@ impl PersonasSimulation {
 
     /// Uses user attribtues to genereat votes for a given piece of content
     pub async fn generate_votes(
-        config: &Config,
-        response: &Response,
-        debate: &Debate,
+        config: Config,
+        response: Response,
+        debate: Debate,
         votes: u64,
-        users: &Vec<PersonasUser>,
+        users: Vec<PersonasUser>,
     ) -> Result<(), PulpError> {
         debate
             .update_voters(&config.neo4j_graph, votes as i64)
@@ -546,8 +611,15 @@ impl PersonasSimulation {
 
         for _ in 0..votes {
             let rint = (random::<f32>() * users.clone().len() as f32).floor() as usize;
-            let rand_user = &users[rint];
+            let rand_user = users[rint].clone();
 
+            // task::spawn({
+            // let config = config.clone();
+            // let response = response.clone();
+            // let debate = debate.clone();
+            // let rand_user = rand_user.clone();
+
+            // async move {
             let mut vote = VoteContentPrompt::default();
             vote.replace_attributes(vec![
                 ("THIS_CONTENT".to_string(), response.clone().content.clone()),
@@ -593,13 +665,15 @@ impl PersonasSimulation {
 
             response
                 .update_valid_vote_count(&config.neo4j_graph, votes.0)
-                .await?;
+                .await;
             response
                 .update_invalid_vote_count(&config.neo4j_graph, votes.1)
-                .await?;
+                .await;
             response
                 .update_abstain_vote_count(&config.neo4j_graph, votes.2)
-                .await?;
+                .await;
+            // }
+            // });
         }
 
         Ok(())

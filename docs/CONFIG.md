@@ -1,3 +1,4 @@
+# Pulpcalc configuration
 When simulating a debate using the CLI, configuration values must be provided in the form of a toml file. The various configurations seen below are...
 
 > **NOTE**

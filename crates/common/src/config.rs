@@ -1,6 +1,7 @@
 use neo4rs::Graph;
 use std::{env, sync::Arc};
 
+#[derive(Clone)]
 pub struct Config {
     /// Reddit app Id
     pub reddit_app_id: Option<String>,
@@ -32,7 +33,7 @@ pub struct Config {
     /// Neo4j database password
     pub neo_password: Option<String>,
 
-    pub open_ai_key: String,
+    pub open_ai_key: Arc<String>,
 
     pub neo4j_graph: Arc<Graph>,
 }
@@ -52,7 +53,7 @@ impl Config {
             neo_endpoint: None,
             neo_user: None,
             neo_password: None,
-            open_ai_key: "".to_string(),
+            open_ai_key: Arc::new("".to_string()),
             neo4j_graph: Arc::new(g),
         }
     }
@@ -61,12 +62,12 @@ impl Config {
         let mut config = Config::default().await;
 
         let open_ai = match env::var("OPENAI_KEY").ok() {
-            Some(key) => key,
+            Some(key) => Arc::new(key),
             None => {
                 println!("OPENAI_KEY not found");
                 // std::process::exit(1);
 
-                String::from("")
+                Arc::new(String::from(""))
             }
         };
 
@@ -85,7 +86,8 @@ impl Config {
         config.neo_endpoint = Some("localhost:7687".to_string());
         config.neo_user = Some("neo4j".to_string());
         config.neo_password = Some("123".to_string());
-        config.open_ai_key = "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".to_string();
+        config.open_ai_key =
+            Arc::new("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".to_string());
 
         let g = Arc::new(
             Graph::new(
